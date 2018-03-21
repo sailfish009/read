@@ -18,7 +18,6 @@ use winapi::um::winuser::WS_OVERLAPPEDWINDOW;
 use winapi::um::winuser::WS_VISIBLE;
 use winapi::um::winuser::WNDCLASSW;
 
-extern crate user32; 
 use std::os::windows::ffi::OsStrExt;
 use std::ffi::OsStr;
 
@@ -34,9 +33,9 @@ pub unsafe extern "system" fn window_proc(h_wnd :HWND,
 {
   if msg == winapi::um::winuser::WM_DESTROY 
   {
-    user32::PostQuitMessage(0);
+    winapi::um::winuser::PostQuitMessage(0);
   }
-  return user32::DefWindowProcW( h_wnd, msg, w_param, l_param);
+  return winapi::um::winuser::DefWindowProcW( h_wnd, msg, w_param, l_param);
 }
 
 fn main() 
@@ -60,13 +59,13 @@ fn main()
       lpszClassName: class_name.as_ptr(),
     };
 
-    user32::RegisterClassW(&wnd);
+    winapi::um::winuser::RegisterClassW(&wnd);
 
     let hwnd = winapi::um::winuser::CreateWindowExW(0, class_name.as_ptr(), 
       to_wstring("read v0.1").as_ptr(),
       WS_OVERLAPPEDWINDOW | WS_VISIBLE, 0, 0, 640, 480, 0 as HWND, 0 as HMENU, 0 as HINSTANCE, std::ptr::null_mut());
   
-    user32::ShowWindow(hwnd, winapi::um::winuser::SW_SHOW);
+    winapi::um::winuser::ShowWindow(hwnd, winapi::um::winuser::SW_SHOW);
       
     let mut msg = winapi::um::winuser::MSG 
     {
@@ -80,11 +79,11 @@ fn main()
 
     loop
     {
-      let m = user32::GetMessageW(&mut msg, 0 as HWND, 0, 0);
+      let m = winapi::um::winuser::GetMessageW(&mut msg, 0 as HWND, 0, 0);
       if m > 0
       {
-        user32::TranslateMessage(&mut msg);
-        user32::DispatchMessageW(&mut msg);
+        winapi::um::winuser::TranslateMessage(&mut msg);
+        winapi::um::winuser::DispatchMessageW(&mut msg);
       }
     }
   }
