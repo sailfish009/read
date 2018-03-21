@@ -24,19 +24,19 @@ use std::ffi::OsStr;
 
 fn to_wstring(str : &str) -> Vec<u16> 
 {
-    let v : Vec<u16> =
-            OsStr::new(str).encode_wide().chain(Some(0).into_iter()).collect();
-    v
+  let v : Vec<u16> =
+    OsStr::new(str).encode_wide().chain(Some(0).into_iter()).collect();
+  v
 }
 
 pub unsafe extern "system" fn window_proc(h_wnd :HWND, 
-	msg :UINT, w_param :WPARAM, l_param :LPARAM) -> LRESULT
+  msg :UINT, w_param :WPARAM, l_param :LPARAM) -> LRESULT
 {
-    if msg == winapi::um::winuser::WM_DESTROY {
-        user32::PostQuitMessage(0);
-    }
-
-    return user32::DefWindowProcW( h_wnd, msg, w_param, l_param);
+  if msg == winapi::um::winuser::WM_DESTROY 
+  {
+    user32::PostQuitMessage(0);
+  }
+  return user32::DefWindowProcW( h_wnd, msg, w_param, l_param);
 }
 
 fn main() 
