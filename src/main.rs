@@ -75,7 +75,7 @@ fn main()
       wParam : 0 as WPARAM,
       lParam : 0 as LPARAM,
       time : 0 as DWORD,
-      p : winapi::shared::windef::POINT{x:0, y:0, }, 
+      pt : winapi::shared::windef::POINT{x:0, y:0, }, 
     };
 
     loop
