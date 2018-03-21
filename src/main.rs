@@ -78,14 +78,14 @@ fn main()
       p : winapi::shared::windef::POINT{x:0, y:0, }, 
     };
 
-	loop
-	{
-	  let m = user32::GetMessageW(&mut msg, 0 as HWND, 0, 0);
-	  if m > 0
-	  {
-	    user32::TranslateMessage(&mut msg);
-	    user32::DispatchMessageW(&mut msg);
-	  }
-	}
+    loop
+    {
+      let m = user32::GetMessageW(&mut msg, 0 as HWND, 0, 0);
+      if m > 0
+      {
+        user32::TranslateMessage(&mut msg);
+        user32::DispatchMessageW(&mut msg);
+      }
+    }
   }
 }
