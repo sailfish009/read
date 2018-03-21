@@ -1,11 +1,9 @@
 extern crate winapi; 
 use winapi::shared::windef::HWND;
-// use winapi::windef::HWND;
 use winapi::shared::windef::HMENU;
 use winapi::shared::windef::HBRUSH;
 use winapi::shared::windef::HICON;
 use winapi::shared::minwindef::HINSTANCE;
-// use winapi::minwindef::HINSTANCE;
 
 use winapi::shared::minwindef::UINT;
 use winapi::shared::minwindef::DWORD;
@@ -48,7 +46,7 @@ fn main()
     let wnd = WNDCLASSW
     {
       style: 0,
-	  lpfnWndProc: Some(window_proc),
+      lpfnWndProc: Some(window_proc),
       cbClsExtra: 0,
       cbWndExtra: 0,
       hInstance: 0 as HINSTANCE,
