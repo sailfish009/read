@@ -1,0 +1,10 @@
+[package]
+name = "read"
+version = "0.1.0"
+authors = ["sailfish009 <sailfish009@gmail.com>"]
+
+[dependencies]
+libc = "0.2.39"
+winapi = { version = "0.3.4", features = ["winuser"] }
+user32-sys = "0.2.0"
+kernel32-sys = "0.2.2"
