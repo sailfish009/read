@@ -27,39 +27,53 @@
 // hide console window
 #![windows_subsystem = "windows"]
 
-const SX:i32 = 200; // window x
-const SY:i32 = 200; // window y
-const W:i32 = 800;  // window width
-const H:i32 = 600;  // window height
+// #[macro_use]
+// extern crate lazy_static;
+
+const SX:i32 = 200;  const SY:i32 = 200;  const W:i32 = 800;   const H:i32 = 600;
+const R_A: u8 = 0;   const G_A: u8 = 0;   const B_A: u8 = 0;
+const R_B: u8 = 250; const G_B: u8 = 250; const B_B: u8 = 250;
 
 extern crate winapi; 
-use winapi::um::winuser as user;
-use winapi::um::wingdi as gdi;
-use winapi::shared::windef as def;
-use winapi::shared::minwindef as mindef;
 
-use def::HWND;
-use def::HMENU;
-use def::HBRUSH;
-use def::HICON;
-
-use mindef::HINSTANCE;
-use mindef::UINT;
-use mindef::DWORD;
-use mindef::WPARAM;
-use mindef::LPARAM;
-use mindef::LRESULT;
-
-use winapi::um::winnt::LPCWSTR;
-use user::WS_OVERLAPPEDWINDOW;
-use user::WS_VISIBLE;
-use user::WNDCLASSW;
+use winapi::um::winuser as user;     use winapi::um::wingdi as gdi;
+use winapi::shared::windef as def;   use winapi::shared::minwindef as mindef;
+use def::HWND;                       use def::HMENU;        
+use def::HBRUSH;                     use def::HICON;
+use def::HFONT;                      use def::HGDIOBJ;
+use def::HDC;     
+use mindef::HINSTANCE;               use mindef::UINT;
+use mindef::DWORD;                   use mindef::WPARAM;
+use mindef::LPARAM;                  use mindef::LRESULT;
+use user::WS_OVERLAPPEDWINDOW;       use user::WS_VISIBLE;use user::WNDCLASSW;
+use winapi::um::winnt::LPCWSTR;      use winapi::um::winnt::LONG;
 
 use std::os::windows::ffi::OsStrExt;
 use std::ffi::OsStr;
+
 use std::ptr;
+// use std::string::String;
 
 static MODE: u8 = 0;
+static LINE: &str = "";
+
+fn to_wchar(str : &str) -> *const u16 {
+  let v : Vec<u16> =
+    OsStr::new(str).encode_wide(). chain(Some(0).into_iter()).collect();
+  v.as_ptr()
+}
+
+static CH_Y: LONG = 0;
+
+struct CH 
+{
+  x: LONG,
+  y: LONG,
+  c: u8,
+  w: u8,
+}
+
+static CHAR: CH = CH {x:0,y:0,c:0,w:0};
 
 fn to_wstring(str : &str) -> Vec<u16> 
 {
@@ -68,11 +82,95 @@ fn to_wstring(str : &str) -> Vec<u16>
   v
 }
 
-fn edit(w :WPARAM)
+
+
+fn drawtext(w :HWND, f: HFONT, c :CH, p :WPARAM, l: LPARAM)
 {
-  match w 
+  unsafe
   {
+    let dc = user::GetDC(w) as HDC;
+    gdi::SelectObject(dc, f as HGDIOBJ );
+    gdi::SetTextColor(dc, gdi::RGB(R_B,G_B,B_B));
+    gdi::SetBkColor(dc, gdi::RGB(R_A,G_A,B_A));
+
+    match p 
+    {
+      0 =>
+      {
+        let ch = c.c as LPCWSTR;
+
+        if l == 0
+        {
+          gdi::TextOutW(dc, c.x, c.y * CH_Y, ch, 1);
+        }
+      },
+      _ => (),
+    }
+  }
+}
+
+
+
+fn edit(w :HWND, p :WPARAM)
+{
+  if unsafe{user::GetAsyncKeyState(user::VK_CONTROL)} as u16 & 0x8000 != 0
+  {
+    unsafe{user::HideCaret(w)};
+
+	match p 
+	{
+      0x0F => println!("0x0F"),
+      0x13 => println!("0x13"),
+      0x02 => println!("0x02"),
+      0x03 => println!("0x03"),
+      _ => (),
+	}
+	return;
+  }
+
+  match MODE 
+  {
+    // save mode
+    1 =>
+    unsafe
+	{
+      user::HideCaret(w);
+	  match p
+	  {
+	    // key move
+        0x69 => println!("0x69"),
+        0x68 => println!("0x68"),
+        0x6C => println!("0x6C"),
+        0x6B => println!("0x6B"),
+        0x6A => println!("0x6A"),
+	    // key dd
+        0x64 => println!("0x64"),
+	    // key zz
+        0x7A => println!("0x7A"),
+        _ => (),
+	  }
+      user::ShowCaret(w);
+	}
+	,
+    // edit mode, bypass
     _ => (),
+  }
+
+  match p 
+  {
+    // backspace
+    0x08 => println!("0x08"),
+    // enter 
+    0x0D => println!("0x0D"),
+    // esc
+    0x1B => println!("0x1B"),
+    _ => 
+	// edit
+	unsafe
+	{
+	  // LINE.push_str()
+	}
+	,
   }
 }
 
@@ -81,7 +179,8 @@ pub unsafe extern "system" fn window_proc(h_wnd :HWND,
 {
   match msg 
   {
-    user::WM_CHAR => edit(w_param),
+    user::WM_CREATE => println!("init"),
+    user::WM_CHAR => edit(h_wnd, w_param),
     user::WM_DESTROY => user::PostQuitMessage(0),
     _ => (),
   }
@@ -93,6 +192,11 @@ fn main()
   unsafe
   {
     let class_name = to_wstring("window");
+
+    let font = gdi::CreateFontW(18, 0, 0, 0, 
+      gdi::FW_LIGHT, 0, 0, 0, gdi::DEFAULT_CHARSET, gdi::OUT_DEFAULT_PRECIS, 
+      gdi::CLIP_DEFAULT_PRECIS, gdi::DEFAULT_QUALITY,  gdi::DEFAULT_PITCH, 
+      to_wchar("Dejavu Sans Mono") );
 
     let wnd = WNDCLASSW
     {
@@ -128,7 +232,7 @@ fn main()
     };
 
     // background
-    let brush = gdi::CreateSolidBrush(gdi::RGB(0,0,0)) as i32;
+    let brush = gdi::CreateSolidBrush(gdi::RGB(R_A,G_A,B_A)) as i32;
     user::SetClassLongPtrW(hwnd, user::GCLP_HBRBACKGROUND, brush);
     user::MoveWindow(hwnd, SX, SY, W, H, 1);
 
