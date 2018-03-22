@@ -92,15 +92,15 @@ fn main()
 	// background
     let brush  =  gdi::CreateSolidBrush(gdi::RGB(0,0,0)) as i32;
     user::SetClassLongPtrW(hwnd, user::GCLP_HBRBACKGROUND, brush);
-	user::MoveWindow(hwnd, SX, SY, W, H, 1);
+    user::MoveWindow(hwnd, SX, SY, W, H, 1);
 
     loop
     {
       let m = user::GetMessageW(&mut msg, 0 as HWND, 0, 0);
-	  if msg.message == user::WM_QUIT
-	  {
-	    break;
-	  }
+      if msg.message == user::WM_QUIT
+      {
+        break;
+      }
       if m > 0
       {
         user::TranslateMessage(&mut msg);
