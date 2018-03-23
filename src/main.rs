@@ -129,25 +129,25 @@ fn edit(w :HWND, p :WPARAM)
     // save mode
     1 =>
     unsafe
-	{
+    {
       user::HideCaret(w);
-	  match p
-	  {
-	    // key move
+      match p
+      {
+        // key move
         0x69 => println!("0x69"),
         0x68 => println!("0x68"),
         0x6C => println!("0x6C"),
         0x6B => println!("0x6B"),
         0x6A => println!("0x6A"),
-	    // key dd
+        // key dd
         0x64 => println!("0x64"),
-	    // key zz
+        // key zz
         0x7A => println!("0x7A"),
         _ => (),
-	  }
+      }
       user::ShowCaret(w);
-	}
-	,
+    }
+    ,
     // edit mode, bypass
     _ => (),
   }
