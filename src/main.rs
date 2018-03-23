@@ -56,13 +56,6 @@ use std::ptr;
 
 static MODE: u8 = 0;
 static LINE: &str = "";
-
-fn to_wchar(str : &str) -> *const u16 {
-  let v : Vec<u16> =
-    OsStr::new(str).encode_wide(). chain(Some(0).into_iter()).collect();
-  v.as_ptr()
-}
-
 static CH_Y: LONG = 0;
 
 struct CH 
@@ -75,14 +68,18 @@ struct CH
 
 static CHAR: CH = CH {x:0,y:0,c:0,w:0};
 
+fn to_wchar(str : &str) -> *const u16 {
+  let v : Vec<u16> =
+    OsStr::new(str).encode_wide(). chain(Some(0).into_iter()).collect();
+  v.as_ptr()
+}
+
 fn to_wstring(str : &str) -> Vec<u16> 
 {
   let v : Vec<u16> =
     OsStr::new(str).encode_wide().chain(Some(0).into_iter()).collect();
   v
 }
-
-
 
 fn drawtext(w :HWND, f: HFONT, c :CH, p :WPARAM, l: LPARAM)
 {
@@ -116,16 +113,15 @@ fn edit(w :HWND, p :WPARAM)
   if unsafe{user::GetAsyncKeyState(user::VK_CONTROL)} as u16 & 0x8000 != 0
   {
     unsafe{user::HideCaret(w)};
-
-	match p 
-	{
+    match p 
+    {
       0x0F => println!("0x0F"),
       0x13 => println!("0x13"),
       0x02 => println!("0x02"),
       0x03 => println!("0x03"),
       _ => (),
-	}
-	return;
+    }
+    return;
   }
 
   match MODE 
@@ -165,26 +161,26 @@ fn edit(w :HWND, p :WPARAM)
     // esc
     0x1B => println!("0x1B"),
     _ => 
-	// edit
-	unsafe
-	{
-	  // LINE.push_str()
-	}
-	,
+    // edit
+    unsafe
+    {
+    	// LINE.push_str()
+    }
+    ,
   }
 }
 
-pub unsafe extern "system" fn window_proc(h_wnd :HWND, 
-  msg :UINT, w_param :WPARAM, l_param :LPARAM) -> LRESULT
+pub unsafe extern "system" fn window_proc(w :HWND, 
+  msg :UINT, p :WPARAM, l :LPARAM) -> LRESULT
 {
   match msg 
   {
     user::WM_CREATE => println!("init"),
-    user::WM_CHAR => edit(h_wnd, w_param),
+    user::WM_CHAR => edit(w, p),
     user::WM_DESTROY => user::PostQuitMessage(0),
     _ => (),
   }
-  return user::DefWindowProcW( h_wnd, msg, w_param, l_param);
+  return user::DefWindowProcW( w, msg, p, l);
 }
 
 fn main() 
