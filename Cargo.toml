@@ -5,5 +5,4 @@ authors = ["sailfish009 <sailfish009@gmail.com>"]
 
 [dependencies]
 libc = "0.2.39"
-lazy_static = "1.0"
 winapi = { version = "0.3.4", features = ["winuser"] }
