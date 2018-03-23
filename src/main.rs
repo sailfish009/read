@@ -45,7 +45,9 @@ use def::HDC;
 use mindef::HINSTANCE;               use mindef::UINT;
 use mindef::DWORD;                   use mindef::WPARAM;
 use mindef::LPARAM;                  use mindef::LRESULT;
-use user::WS_OVERLAPPEDWINDOW;       use user::WS_VISIBLE;use user::WNDCLASSW;
+use mindef::LPVOID;
+use user::WS_OVERLAPPEDWINDOW;       use user::WS_VISIBLE;
+use user::WNDCLASSW;                 use user::LPCREATESTRUCTW;
 use winapi::um::winnt::LPCWSTR;      use winapi::um::winnt::LONG;
 
 use std::os::windows::ffi::OsStrExt;
@@ -108,7 +110,7 @@ fn drawtext(w :HWND, f: HFONT, c :CH, p :WPARAM, l: LPARAM)
 
 
 
-fn edit(w :HWND, p :WPARAM)
+fn edit(w :HWND, p :WPARAM, f :HFONT)
 {
   if unsafe{user::GetAsyncKeyState(user::VK_CONTROL)} as u16 & 0x8000 != 0
   {
@@ -121,6 +123,7 @@ fn edit(w :HWND, p :WPARAM)
       0x03 => println!("0x03"),
       _ => (),
     }
+    println!("GetAsyncKeyState");
     return;
   }
 
@@ -164,7 +167,8 @@ fn edit(w :HWND, p :WPARAM)
     // edit
     unsafe
     {
-    	// LINE.push_str()
+      // LINE.push_str()
+	  println!("{0}", p);
     }
     ,
   }
@@ -173,10 +177,16 @@ fn edit(w :HWND, p :WPARAM)
 pub unsafe extern "system" fn window_proc(w :HWND, 
   msg :UINT, p :WPARAM, l :LPARAM) -> LRESULT
 {
+  if msg == user::WM_CREATE
+  {
+    let param = &*(l as LPCREATESTRUCTW);
+    user::SetClassLongPtrW(w, user::GWLP_USERDATA,  param.lpCreateParams as i32);
+  }
+
+  let font = user::GetClassLongPtrW(w, user::GWLP_USERDATA) as HFONT;
   match msg 
   {
-    user::WM_CREATE => println!("init"),
-    user::WM_CHAR => edit(w, p),
+    user::WM_CHAR => edit(w, p, font),
     user::WM_DESTROY => user::PostQuitMessage(0),
     _ => (),
   }
@@ -201,8 +211,8 @@ fn main()
       cbClsExtra: 0,
       cbWndExtra: 0,
       hInstance: 0 as HINSTANCE,
-      hIcon: 0 as HICON, // user32::LoadIconW(0 as HINSTANCE, winapi::um::winuser::IDI_APPLICATION),
-      hCursor: 0 as HICON, // user32::LoadCursorW(0 as HINSTANCE, winapi::um::winuser::IDI_APPLICATION),
+      hIcon: 0 as HICON, // user32::LoadIconW(0 as HINSTANCE, user::IDI_APPLICATION),
+      hCursor: 0 as HICON, // user32::LoadCursorW(0 as HINSTANCE, user::IDI_APPLICATION),
       hbrBackground: 0 as HBRUSH,
       lpszMenuName: 0 as LPCWSTR,
       lpszClassName: class_name.as_ptr(),
@@ -212,7 +222,8 @@ fn main()
 
     let hwnd = user::CreateWindowExW(0, class_name.as_ptr(), 
       to_wstring("read v0.1").as_ptr(),
-      WS_OVERLAPPEDWINDOW | WS_VISIBLE, 0, 0, W, H, 0 as HWND, 0 as HMENU, 0 as HINSTANCE, ptr::null_mut());
+      WS_OVERLAPPEDWINDOW | WS_VISIBLE, 0, 0, W, H, 0 as HWND, 0 as HMENU, 0 as HINSTANCE, font as LPVOID);
+    // WS_OVERLAPPEDWINDOW | WS_VISIBLE, 0, 0, W, H, 0 as HWND, 0 as HMENU, 0 as HINSTANCE, ptr::null_mut());
   
     // user::InvalidateRect(hwnd, ptr::null(), 1);
     user::ShowWindow(hwnd, user::SW_SHOW);
