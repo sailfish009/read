@@ -101,7 +101,7 @@ fn drawtext(w :HWND, f: HFONT, c :CH, p :WPARAM, l: LPARAM)
         if l == 0
         {
           gdi::TextOutW(dc, c.x, c.y * CH_Y, ch, 1);
-		  user::ReleaseDC(w, dc);
+          user::ReleaseDC(w, dc);
         }
       },
       _ => (),
