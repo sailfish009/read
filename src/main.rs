@@ -36,23 +36,14 @@ const R_B: u8 = 250; const G_B: u8 = 250; const B_B: u8 = 250;
 
 extern crate winapi; 
 
-use winapi::um::winuser as user;     use winapi::um::wingdi as gdi;
-use winapi::shared::windef as def;   use winapi::shared::minwindef as mindef;
-use def::HWND;                       use def::HMENU;        
-use def::HBRUSH;                     use def::HICON;
-use def::HFONT;                      use def::HGDIOBJ;
-use def::HDC;     
-use mindef::HINSTANCE;               use mindef::UINT;
-use mindef::DWORD;                   use mindef::WPARAM;
-use mindef::LPARAM;                  use mindef::LRESULT;
-use mindef::LPVOID;
-use user::WS_OVERLAPPEDWINDOW;       use user::WS_VISIBLE;
-use user::WNDCLASSW;                 use user::LPCREATESTRUCTW;
-use winapi::um::winnt::LPCWSTR;      use winapi::um::winnt::LONG;
-
+use winapi::um::winuser as user;     
+use winapi::um::wingdi as gdi;
+use winapi::shared::windef::{HWND, HMENU, HBRUSH, HICON, HFONT, HGDIOBJ, HDC};        
+use winapi::shared::minwindef::{HINSTANCE, UINT, DWORD, WPARAM, LPARAM, LRESULT, LPVOID };        
+use user::{WS_OVERLAPPEDWINDOW, WS_VISIBLE, WNDCLASSW, LPCREATESTRUCTW};        
+use winapi::um::winnt::{LPCWSTR, LONG};
 use std::os::windows::ffi::OsStrExt;
 use std::ffi::OsStr;
-
 use std::ptr;
 // use std::string::String;
 
