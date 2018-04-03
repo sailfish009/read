@@ -25,10 +25,10 @@
 //========================================================================
 
 // hide console window
-#![windows_subsystem = "windows"]
+// #![windows_subsystem = "windows"]
 
-// #[macro_use]
-// extern crate lazy_static;
+#[macro_use]
+extern crate lazy_static;
 
 const SX:i32 = 200;  const SY:i32 = 200;  const W:i32 = 800;   const H:i32 = 600;
 const R_A: u8 = 0;   const G_A: u8 = 0;   const B_A: u8 = 0;
@@ -45,11 +45,19 @@ use winapi::um::winnt::{LPCWSTR, LONG};
 use std::os::windows::ffi::OsStrExt;
 use std::ffi::OsStr;
 use std::ptr;
-// use std::string::String;
+use std::string::String;
 
 static MODE: u8 = 0;
-static LINE: &str = "";
 static CH_Y: LONG = 0;
+
+lazy_static!
+{
+  static ref LINE:String = 
+  {
+    let mut string = String::new();
+    string
+  };
+}
 
 struct CH 
 {
