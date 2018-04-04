@@ -46,17 +46,14 @@ use std::os::windows::ffi::OsStrExt;
 use std::ffi::OsStr;
 use std::ptr;
 use std::string::String;
+use std::sync::Mutex;
 
 static MODE: u8 = 0;
 static CH_Y: LONG = 0;
 
 lazy_static!
 {
-  static ref LINE:String = 
-  {
-    let mut string = String::new();
-    string
-  };
+  static ref LINE: Mutex<String> = Mutex::new(String::new());
 }
 
 struct CH 
@@ -71,7 +68,7 @@ static CHAR: CH = CH {x:0,y:0,c:0,w:0};
 
 fn to_wchar(str : &str) -> *const u16 {
   let v : Vec<u16> =
-    OsStr::new(str).encode_wide(). chain(Some(0).into_iter()).collect();
+    OsStr::new(str).encode_wide().chain(Some(0).into_iter()).collect();
   v.as_ptr()
 }
 
@@ -167,7 +164,8 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
     // edit
     unsafe
     {
-      // LINE.push_str()
+      // LINE.push(std::char::from_u32_unchecked(p as u32) );
+      LINE.lock().unwrap().push(std::char::from_u32_unchecked(p as u32) );
       println!("{0}", p);
     }
     ,
