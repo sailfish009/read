@@ -30,7 +30,7 @@
 #[macro_use]
 extern crate lazy_static;
 
-const SX:i32 = 200;  const SY:i32 = 200;  const W:i32 = 800;   const H:i32 = 600;
+const SX: i32 = 200; const SY: i32 = 200; const W:  i32 = 800;   const H:i32 = 600;
 const R_A: u8 = 0;   const G_A: u8 = 0;   const B_A: u8 = 0;
 const R_B: u8 = 250; const G_B: u8 = 250; const B_B: u8 = 250;
 
@@ -38,7 +38,7 @@ extern crate winapi;
 
 use winapi::um::winuser as user;     
 use winapi::um::wingdi as gdi;
-use winapi::shared::windef::{HWND, HMENU, HBRUSH, HICON, HFONT, HGDIOBJ, HDC};        
+use winapi::shared::windef::{HWND, HMENU, HBRUSH, HICON, HFONT, HGDIOBJ, HDC, POINT};        
 use winapi::shared::minwindef::{HINSTANCE, UINT, DWORD, WPARAM, LPARAM, LRESULT, LPVOID };        
 use user::{WS_OVERLAPPEDWINDOW, WS_VISIBLE, WNDCLASSW, LPCREATESTRUCTW};        
 use winapi::um::winnt::{LPCWSTR, LONG};
@@ -47,24 +47,19 @@ use std::ffi::OsStr;
 use std::ptr;
 use std::string::String;
 use std::sync::Mutex;
+use std::iter::Zip;
 
 static MODE: u8 = 0;
 static CH_Y: LONG = 0;
+struct CH {x: LONG,  y: LONG, c: u8, w: u8}
+
+// static CHAR: CH = CH {x:0,y:0,c:0,w:0};
 
 lazy_static!
 {
-  static ref LINE: Mutex<String> = Mutex::new(String::new());
+  static ref LA: Mutex<Vec<LINE>> = Mutex::new(Vec::new());
+  static ref LINE: Mutex<Vec<CH>> = Mutex::new(Vec::new());
 }
-
-struct CH 
-{
-  x: LONG,
-  y: LONG,
-  c: u8,
-  w: u8,
-}
-
-static CHAR: CH = CH {x:0,y:0,c:0,w:0};
 
 fn to_wchar(str : &str) -> *const u16 {
   let v : Vec<u16> =
@@ -79,7 +74,7 @@ fn to_wstring(str : &str) -> Vec<u16>
   v
 }
 
-fn drawtext(w :HWND, f: HFONT, c :CH, p :WPARAM, l: LPARAM)
+fn drawtext(w :HWND, f :HFONT, c :CH, p :WPARAM, l :LPARAM)
 {
   unsafe
   {
@@ -92,19 +87,22 @@ fn drawtext(w :HWND, f: HFONT, c :CH, p :WPARAM, l: LPARAM)
     {
       0 =>
       {
-        let ch = c.c as LPCWSTR;
-
         if l == 0
         {
-          gdi::TextOutW(dc, c.x, c.y * CH_Y, ch, 1);
-          user::ReleaseDC(w, dc);
+          let string :String = c.c.to_string();
+          let ch = to_wchar(&string);
+          // gdi::TextOutW(dc, c.x, c.y * CH_Y, ch, 1);
+          // gdi::TextOutW(dc, 0, 0, ch, 1);
+          println!("{0}", c.c);
         }
       },
       _ => (),
     }
+    user::ReleaseDC(w, dc);
   }
-}
 
+  // LINE.lock().unwrap().push(c);
+}
 
 
 fn edit(w :HWND, p :WPARAM, f :HFONT)
@@ -165,8 +163,11 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
     unsafe
     {
       // LINE.push(std::char::from_u32_unchecked(p as u32) );
-      LINE.lock().unwrap().push(std::char::from_u32_unchecked(p as u32) );
-      println!("{0}", p);
+      let d = std::char::from_u32_unchecked(p as u32) as u8;
+      let ch = CH{x:0,y:0,c:d,w:0};
+
+      drawtext(w, f, ch, 0, 0);  
+      // println!("{0}", p);
     }
     ,
   }
@@ -233,7 +234,7 @@ fn main()
       wParam : 0 as WPARAM,
       lParam : 0 as LPARAM,
       time : 0 as DWORD,
-      pt : winapi::shared::windef::POINT{x:0, y:0, }, 
+      pt : POINT{x:0, y:0, }, 
     };
 
     // background
