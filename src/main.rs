@@ -31,8 +31,8 @@
 extern crate lazy_static;
 
 const SX: i32 = 200; const SY: i32 = 200; const W:  i32 = 800;   const H:i32 = 600;
-const R_A: u8 = 0;   const G_A: u8 = 0;   const B_A: u8 = 0;
-const R_B: u8 = 250; const G_B: u8 = 250; const B_B: u8 = 250;
+const R_A: u8 = 250; const G_A: u8 = 250; const B_A: u8 = 250;
+const R_B: u8 = 0;   const G_B: u8 = 0;   const B_B: u8 = 0;
 
 extern crate winapi; 
 
@@ -81,8 +81,8 @@ fn drawtext(w :HWND, f :HFONT, c :CH, p :WPARAM, l :LPARAM)
   {
     let dc = user::GetDC(w) as HDC;
     gdi::SelectObject(dc, f as HGDIOBJ );
-    gdi::SetTextColor(dc, gdi::RGB(R_B,G_B,B_B));
-    gdi::SetBkColor(dc, gdi::RGB(R_A,G_A,B_A));
+    gdi::SetTextColor(dc, gdi::RGB(R_A,G_A,B_A));
+    gdi::SetBkColor(dc, gdi::RGB(R_B,G_B,B_B));
 
     match p 
     {
@@ -237,7 +237,7 @@ fn main()
     user::SendMessageW(hwnd, user::WM_SETFONT, font as WPARAM, 1);
 
     // background
-    let brush = gdi::CreateSolidBrush(gdi::RGB(R_A,G_A,B_A)) as i32;
+    let brush = gdi::CreateSolidBrush(gdi::RGB(R_B,G_B,B_B)) as i32;
     user::SetClassLongPtrW(hwnd, user::GCLP_HBRBACKGROUND, brush);
     user::MoveWindow(hwnd, SX, SY, W, H, 1);
 
