@@ -38,8 +38,8 @@ extern crate winapi;
 
 use winapi::um::winuser as user;     
 use winapi::um::wingdi as gdi;
-use winapi::shared::windef::{HWND, HMENU, HBRUSH, HICON, HFONT, HGDIOBJ, HDC, POINT};        
-use winapi::shared::minwindef::{HINSTANCE, UINT, DWORD, WPARAM, LPARAM, LRESULT, LPVOID };        
+use winapi::shared::windef::{HWND, HMENU, HBRUSH, HICON, HFONT, HGDIOBJ, HBITMAP, HDC, POINT};        
+use winapi::shared::minwindef::{HINSTANCE, INT, UINT, LPINT, DWORD, WPARAM, LPARAM, LRESULT, LPVOID };        
 use user::{WS_OVERLAPPEDWINDOW, WS_VISIBLE, WNDCLASSW, LPCREATESTRUCTW};        
 use winapi::um::winnt::{LPCWSTR, LONG};
 use std::os::windows::ffi::OsStrExt;
@@ -51,7 +51,7 @@ use std::iter::Zip;
 
 static MODE: u8 = 0;
 static CH_Y: LONG = 0;
-struct CH {x: LONG,  y: LONG, c: char, w: u8}
+struct CH {x: LONG,  y: LONG, c: char, w: INT}
 
 // static CHAR: CH = CH {x:0,y:0,c:0,w:0};
 
@@ -59,6 +59,8 @@ lazy_static!
 {
   static ref LA: Mutex<Vec<LINE>> = Mutex::new(Vec::new());
   static ref LINE: Mutex<Vec<CH>> = Mutex::new(Vec::new());
+  static ref CHX: Mutex<LONG> = Mutex::new(0);
+  static ref CHY: Mutex<LONG> = Mutex::new(0);
 }
 
 fn to_wchar(str : &str) -> *const u16 
@@ -92,6 +94,8 @@ fn drawtext(w :HWND, f :HFONT, c :CH, p :WPARAM, l :LPARAM)
         {
           let string :String = c.c.to_string();
           let ch = to_wstring(&string);
+          let mut char_w : INT = 0;
+          gdi::GetCharWidth32W(dc, 0 as UINT, 0 as UINT, &mut char_w); 
           gdi::TextOutW(dc, c.x, c.y * CH_Y, ch.as_ptr(), 1);
         }
       },
@@ -235,6 +239,40 @@ fn main()
 
     // font
     user::SendMessageW(hwnd, user::WM_SETFONT, font as WPARAM, 1);
+
+    let dc = user::GetDC(hwnd) as HDC;
+    let mut tm = gdi::TEXTMETRICW
+    {
+      tmHeight: 0,
+      tmAscent: 0,
+      tmDescent: 0,
+      tmInternalLeading: 0,
+      tmExternalLeading: 0,
+      tmAveCharWidth: 0,
+      tmMaxCharWidth: 0,
+      tmWeight: 0,
+      tmOverhang: 0,
+      tmDigitizedAspectX: 0,
+      tmDigitizedAspectY: 0,
+      tmFirstChar: 0,
+      tmLastChar: 0,
+      tmDefaultChar: 0,
+      tmBreakChar: 0,
+      tmItalic: 0,
+      tmUnderlined: 0,
+      tmStruckOut: 0,
+      tmPitchAndFamily: 0,
+      tmCharSet: 0,
+    };
+    gdi::SelectObject(dc, font as HGDIOBJ );
+    gdi::GetTextMetricsW(dc, &mut tm);
+    user::ReleaseDC(hwnd, dc);
+
+    *CHX.lock().unwrap() = tm.tmAveCharWidth;
+    *CHY.lock().unwrap() = tm.tmHeight;
+
+    // println!("char_x: {0}, char_y: {1}", *CHX.lock().unwrap(), *CHY.lock().unwrap());
+    user::CreateCaret(hwnd, 0 as HBITMAP, 1, *CHY.lock().unwrap());
 
     // background
     let brush = gdi::CreateSolidBrush(gdi::RGB(R_B,G_B,B_B)) as i32;
