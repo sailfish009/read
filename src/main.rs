@@ -51,7 +51,7 @@ use std::iter::Zip;
 
 static MODE: u8 = 0;
 static CH_Y: LONG = 0;
-struct CH {x: LONG,  y: LONG, c: u8, w: u8}
+struct CH {x: LONG,  y: LONG, c: char, w: u8}
 
 // static CHAR: CH = CH {x:0,y:0,c:0,w:0};
 
@@ -61,7 +61,8 @@ lazy_static!
   static ref LINE: Mutex<Vec<CH>> = Mutex::new(Vec::new());
 }
 
-fn to_wchar(str : &str) -> *const u16 {
+fn to_wchar(str : &str) -> *const u16 
+{
   let v : Vec<u16> =
     OsStr::new(str).encode_wide().chain(Some(0).into_iter()).collect();
   v.as_ptr()
@@ -90,10 +91,8 @@ fn drawtext(w :HWND, f :HFONT, c :CH, p :WPARAM, l :LPARAM)
         if l == 0
         {
           let string :String = c.c.to_string();
-          let ch = to_wchar(&string);
-          // gdi::TextOutW(dc, c.x, c.y * CH_Y, ch, 1);
-          // gdi::TextOutW(dc, 0, 0, ch, 1);
-          println!("{0}", c.c);
+          let ch = to_wstring(&string);
+          gdi::TextOutW(dc, c.x, c.y * CH_Y, ch.as_ptr(), 1);
         }
       },
       _ => (),
@@ -162,12 +161,9 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
     // edit
     unsafe
     {
-      // LINE.push(std::char::from_u32_unchecked(p as u32) );
-      let d = std::char::from_u32_unchecked(p as u32) as u8;
+      let d = std::char::from_u32_unchecked(p as u32);
       let ch = CH{x:0,y:0,c:d,w:0};
-
       drawtext(w, f, ch, 0, 0);  
-      // println!("{0}", p);
     }
     ,
   }
@@ -236,6 +232,9 @@ fn main()
       time : 0 as DWORD,
       pt : POINT{x:0, y:0, }, 
     };
+
+    // font
+    user::SendMessageW(hwnd, user::WM_SETFONT, font as WPARAM, 1);
 
     // background
     let brush = gdi::CreateSolidBrush(gdi::RGB(R_A,G_A,B_A)) as i32;
