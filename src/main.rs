@@ -50,7 +50,6 @@ use std::sync::Mutex;
 use std::iter::Zip;
 
 static MODE: u8 = 0;
-static CH_Y: LONG = 0;
 struct CH {x: LONG,  y: LONG, c: char, w: INT}
 
 // static CHAR: CH = CH {x:0,y:0,c:0,w:0};
@@ -96,9 +95,11 @@ fn drawtext(w :HWND, f :HFONT, mut c :CH, p :WPARAM, l :LPARAM)
           let string :String = c.c.to_string();
           let ch = to_wstring(&string);
           let mut char_w : INT = 0;
+          let ch_height = *CHY.lock().unwrap();
           c.x = POS.lock().unwrap().x;
+          c.y = POS.lock().unwrap().y;
           gdi::GetCharWidth32W(dc, 0 as UINT, 0 as UINT, &mut char_w); 
-          gdi::TextOutW(dc, c.x, c.y * CH_Y, ch.as_ptr(), 1);
+          gdi::TextOutW(dc, c.x, c.y * ch_height, ch.as_ptr(), 1);
           POS.lock().unwrap().x += char_w;
         }
       },
@@ -160,8 +161,12 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
   {
     // backspace
     0x08 => println!("0x08"),
-    // enter 
-    0x0D => println!("0x0D"),
+    // enter // println!("0x0D"), 
+    0x0D => 
+    {
+      POS.lock().unwrap().x = 0;
+      POS.lock().unwrap().y += 1;
+    },
     // esc
     0x1B => println!("0x1B"),
     _ => 
