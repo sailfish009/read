@@ -113,7 +113,6 @@ fn drawtext(w :HWND, f :HFONT, mut c :CH, p :WPARAM, l :LPARAM)
 
 fn edit(w :HWND, p :WPARAM, f :HFONT)
 {
-  println!("font: {:?}", f);
   if unsafe{user::GetAsyncKeyState(user::VK_CONTROL)} as u16 & 0x8000 != 0
   {
     unsafe{user::HideCaret(w)};
@@ -245,7 +244,10 @@ fn main()
     };
 
     // font
-    user::SendMessageW(hwnd, user::WM_SETFONT, font as WPARAM, 1);
+    if font != ptr::null_mut()
+    {
+      user::SendMessageW(hwnd, user::WM_SETFONT, font as WPARAM, 1);
+    }
 
     let dc = user::GetDC(hwnd) as HDC;
     let mut tm = gdi::TEXTMETRICW
