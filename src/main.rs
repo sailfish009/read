@@ -113,6 +113,7 @@ fn drawtext(w :HWND, f :HFONT, mut c :CH, p :WPARAM, l :LPARAM)
 
 fn edit(w :HWND, p :WPARAM, f :HFONT)
 {
+  println!("font: {:?}", f);
   if unsafe{user::GetAsyncKeyState(user::VK_CONTROL)} as u16 & 0x8000 != 0
   {
     unsafe{user::HideCaret(w)};
@@ -182,10 +183,10 @@ pub unsafe extern "system" fn window_proc(w :HWND,
   if msg == user::WM_CREATE
   {
     let param = &*(l as LPCREATESTRUCTW);
-    user::SetClassLongPtrW(w, user::GWLP_USERDATA,  param.lpCreateParams as i32);
+    user::SetWindowLongPtrW(w, user::GWLP_USERDATA,  param.lpCreateParams as i32);
   }
 
-  let font = user::GetClassLongPtrW(w, user::GWLP_USERDATA) as HFONT;
+  let font = user::GetWindowLongPtrW(w, user::GWLP_USERDATA) as HFONT;
   match msg 
   {
     user::WM_CHAR => edit(w, p, font),
