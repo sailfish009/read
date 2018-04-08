@@ -185,10 +185,14 @@ pub unsafe extern "system" fn window_proc(w :HWND,
     user::SetWindowLongPtrW(w, user::GWLP_USERDATA,  param.lpCreateParams as i32);
   }
 
-  let font = user::GetWindowLongPtrW(w, user::GWLP_USERDATA) as HFONT;
   match msg 
   {
-    user::WM_CHAR => edit(w, p, font),
+    user::WM_CHAR => 
+    {
+      let font = user::GetWindowLongPtrW(w, user::GWLP_USERDATA) as HFONT;
+      edit(w, p, font)
+    }
+    ,
     user::WM_DESTROY => user::PostQuitMessage(0),
     _ => (),
   }
