@@ -59,6 +59,7 @@ lazy_static!
 {
   static ref LA: Mutex<Vec<LINE>> = Mutex::new(Vec::new());
   static ref LINE: Mutex<Vec<CH>> = Mutex::new(Vec::new());
+  static ref POS: Mutex<POINT> = Mutex::new(POINT{x:0, y:0});
   static ref CHX: Mutex<LONG> = Mutex::new(0);
   static ref CHY: Mutex<LONG> = Mutex::new(0);
 }
@@ -77,7 +78,7 @@ fn to_wstring(str : &str) -> Vec<u16>
   v
 }
 
-fn drawtext(w :HWND, f :HFONT, c :CH, p :WPARAM, l :LPARAM)
+fn drawtext(w :HWND, f :HFONT, mut c :CH, p :WPARAM, l :LPARAM)
 {
   unsafe
   {
@@ -95,8 +96,10 @@ fn drawtext(w :HWND, f :HFONT, c :CH, p :WPARAM, l :LPARAM)
           let string :String = c.c.to_string();
           let ch = to_wstring(&string);
           let mut char_w : INT = 0;
+          c.x = POS.lock().unwrap().x;
           gdi::GetCharWidth32W(dc, 0 as UINT, 0 as UINT, &mut char_w); 
           gdi::TextOutW(dc, c.x, c.y * CH_Y, ch.as_ptr(), 1);
+          POS.lock().unwrap().x += char_w;
         }
       },
       _ => (),
@@ -197,11 +200,14 @@ fn main()
   unsafe
   {
     let class_name = to_wstring("window");
+    let font_name = to_wstring("Dejavu Sans Mono");
 
     let font = gdi::CreateFontW(18, 0, 0, 0, 
       gdi::FW_LIGHT, 0, 0, 0, gdi::DEFAULT_CHARSET, gdi::OUT_DEFAULT_PRECIS, 
       gdi::CLIP_DEFAULT_PRECIS, gdi::DEFAULT_QUALITY,  gdi::DEFAULT_PITCH, 
-      to_wchar("Dejavu Sans Mono") );
+      font_name.as_ptr());
+
+    println!("font: {:?}", font);
 
     let wnd = WNDCLASSW
     {
