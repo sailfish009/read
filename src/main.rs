@@ -129,7 +129,9 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
     return;
   }
 
-  match *MODE.lock().unwrap() 
+  let mode = {*MODE.lock().unwrap()};
+
+  match mode
   {
     // save mode
     1 =>
@@ -144,7 +146,6 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
         {
           println!("0x69");
           *MODE.lock().unwrap() = 0;
-          println!("MODE: {0}", *MODE.lock().unwrap());
         },
         // h
         0x68 => println!("0x68"),
