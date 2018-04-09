@@ -49,13 +49,12 @@ use std::string::String;
 use std::sync::Mutex;
 use std::iter::Zip;
 
-static MODE: u8 = 0;
 struct CH {x: LONG,  y: LONG, c: char, w: INT}
-
-// static CHAR: CH = CH {x:0,y:0,c:0,w:0};
 
 lazy_static!
 {
+  // MODE:  0: edit,  1: save 
+  static ref MODE: Mutex<u8> = Mutex::new(1);
   static ref LA: Mutex<Vec<LINE>> = Mutex::new(Vec::new());
   static ref LINE: Mutex<Vec<CH>> = Mutex::new(Vec::new());
   static ref POS: Mutex<POINT> = Mutex::new(POINT{x:0, y:0});
@@ -99,6 +98,7 @@ fn drawtext(w :HWND, f :HFONT, mut c :CH, p :WPARAM, l :LPARAM)
           c.x = POS.lock().unwrap().x;
           c.y = POS.lock().unwrap().y;
           gdi::GetCharWidth32W(dc, 0 as UINT, 0 as UINT, &mut char_w); 
+          c.w = char_w;
           gdi::TextOutW(dc, c.x, c.y * ch_height, ch.as_ptr(), 1);
           POS.lock().unwrap().x += char_w;
         }
@@ -129,7 +129,7 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
     return;
   }
 
-  match MODE 
+  match *MODE.lock().unwrap() 
   {
     // save mode
     1 =>
@@ -139,11 +139,21 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
       match p
       {
         // key move
-        0x69 => println!("0x69"),
+        // i: change mode // println!("0x69"),
+        0x69 => 
+        {
+          println!("0x69");
+          *MODE.lock().unwrap() = 0;
+          println!("MODE: {0}", *MODE.lock().unwrap());
+        },
+        // h
         0x68 => println!("0x68"),
-        0x6C => println!("0x6C"),
-        0x6B => println!("0x6B"),
+        // j
         0x6A => println!("0x6A"),
+        // k
+        0x6B => println!("0x6B"),
+        // l
+        0x6C => println!("0x6C"),
         // key dd
         0x64 => println!("0x64"),
         // key zz
@@ -151,6 +161,7 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
         _ => (),
       }
       user::ShowCaret(w);
+      return;
     }
     ,
     // edit mode, bypass
@@ -167,8 +178,11 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
       POS.lock().unwrap().x = 0;
       POS.lock().unwrap().y += 1;
     },
-    // esc
-    0x1B => println!("0x1B"),
+    // esc   // println!("0x1B"),
+    0x1B => 
+    {
+      *MODE.lock().unwrap() = 1;
+    },
     _ => 
     // edit
     unsafe
@@ -176,8 +190,7 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
       let d = std::char::from_u32_unchecked(p as u32);
       let ch = CH{x:0,y:0,c:d,w:0};
       drawtext(w, f, ch, 0, 0);  
-    }
-    ,
+    },
   }
 }
 
@@ -215,8 +228,6 @@ fn main()
       gdi::FW_LIGHT, 0, 0, 0, gdi::DEFAULT_CHARSET, gdi::OUT_DEFAULT_PRECIS, 
       gdi::CLIP_DEFAULT_PRECIS, gdi::DEFAULT_QUALITY,  gdi::DEFAULT_PITCH, 
       font_name.as_ptr());
-
-    println!("font: {:?}", font);
 
     let wnd = WNDCLASSW
     {
@@ -289,6 +300,7 @@ fn main()
     *CHX.lock().unwrap() = tm.tmAveCharWidth;
     *CHY.lock().unwrap() = tm.tmHeight;
 
+    // println!("MODE: {0}", *MODE.lock().unwrap());
     // println!("char_x: {0}, char_y: {1}", *CHX.lock().unwrap(), *CHY.lock().unwrap());
     user::CreateCaret(hwnd, 0 as HBITMAP, 1, *CHY.lock().unwrap());
 
