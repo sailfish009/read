@@ -111,6 +111,25 @@ fn drawtext(w :HWND, f :HFONT, mut c :CH, p :WPARAM, l :LPARAM)
   // LINE.lock().unwrap().push(c);
 }
 
+fn key_up()
+{
+  println!("key_up");
+}
+
+fn key_down()
+{
+  println!("key_down");
+}
+
+fn key_left()
+{
+  println!("key_left");
+}
+
+fn key_right()
+{
+  println!("key_right");
+}
 
 fn edit(w :HWND, p :WPARAM, f :HFONT)
 {
@@ -141,20 +160,19 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
       match p
       {
         // key move
-        // i: change mode // println!("0x69"),
+        // i: change mode 
         0x69 => 
         {
-          println!("0x69");
           *MODE.lock().unwrap() = 0;
         },
         // h
-        0x68 => println!("0x68"),
+        0x68 => key_left(),
         // j
-        0x6A => println!("0x6A"),
+        0x6A => key_down(),
         // k
-        0x6B => println!("0x6B"),
+        0x6B => key_up(),
         // l
-        0x6C => println!("0x6C"),
+        0x6C => key_right(),
         // key dd
         0x64 => println!("0x64"),
         // key zz
