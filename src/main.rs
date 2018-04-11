@@ -111,24 +111,42 @@ fn drawtext(w :HWND, f :HFONT, mut c :CH, p :WPARAM, l :LPARAM)
   // LINE.lock().unwrap().push(c);
 }
 
-fn key_up()
+fn key_up(w :HWND)
 {
-  println!("key_up");
+  unsafe{user::HideCaret(w)};
+  let y = {POS.lock().unwrap().y};
+  if y == 0 {return;}
+  POS.lock().unwrap().y -= 1;
+  showcaret(w);
 }
 
-fn key_down()
+fn key_down(w :HWND)
 {
-  println!("key_down");
+  unsafe{user::HideCaret(w)};
+  POS.lock().unwrap().y += 1;
+  showcaret(w);
 }
 
-fn key_left()
+fn key_left(w :HWND)
 {
-  println!("key_left");
+  // println!("key_left");
 }
 
-fn key_right()
+fn key_right(w :HWND)
 {
-  println!("key_right");
+  // println!("key_right");
+}
+
+fn showcaret(w :HWND)
+{
+  let x = {POS.lock().unwrap().x};
+  let y = {POS.lock().unwrap().y};
+  let h = {*CHY.lock().unwrap()};
+  unsafe
+  {
+    user::SetCaretPos(x, y*h);
+    user::ShowCaret(w);
+  }
 }
 
 fn edit(w :HWND, p :WPARAM, f :HFONT)
@@ -165,14 +183,8 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
         {
           *MODE.lock().unwrap() = 0;
         },
-        // h
-        0x68 => key_left(),
-        // j
-        0x6A => key_down(),
-        // k
-        0x6B => key_up(),
-        // l
-        0x6C => key_right(),
+        // h, j, k, l
+        0x68 => key_left(w), 0x6A => key_down(w), 0x6B => key_up(w), 0x6C => key_right(w),
         // key dd
         0x64 => println!("0x64"),
         // key zz
@@ -181,8 +193,7 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
       }
       user::ShowCaret(w);
       return;
-    }
-    ,
+    },
     // edit mode, bypass
     _ => (),
   }
@@ -206,9 +217,11 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
     // edit
     unsafe
     {
+      user::HideCaret(w);
       let d = std::char::from_u32_unchecked(p as u32);
       let ch = CH{x:0,y:0,c:d,w:0};
       drawtext(w, f, ch, 0, 0);  
+      showcaret(w);
     },
   }
 }
@@ -228,8 +241,7 @@ pub unsafe extern "system" fn window_proc(w :HWND,
     {
       let font = user::GetWindowLongPtrW(w, user::GWLP_USERDATA) as HFONT;
       edit(w, p, font)
-    }
-    ,
+    },
     user::WM_DESTROY => user::PostQuitMessage(0),
     _ => (),
   }
@@ -316,12 +328,11 @@ fn main()
     gdi::GetTextMetricsW(dc, &mut tm);
     user::ReleaseDC(hwnd, dc);
 
+    user::CreateCaret(hwnd, 0 as HBITMAP, 1, tm.tmHeight);
+    showcaret(hwnd);
+
     *CHX.lock().unwrap() = tm.tmAveCharWidth;
     *CHY.lock().unwrap() = tm.tmHeight;
-
-    // println!("MODE: {0}", *MODE.lock().unwrap());
-    // println!("char_x: {0}, char_y: {1}", *CHX.lock().unwrap(), *CHY.lock().unwrap());
-    user::CreateCaret(hwnd, 0 as HBITMAP, 1, *CHY.lock().unwrap());
 
     // background
     let brush = gdi::CreateSolidBrush(gdi::RGB(R_B,G_B,B_B)) as i32;
