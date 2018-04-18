@@ -55,8 +55,7 @@ lazy_static!
 {
   // MODE:  0: edit,  1: save 
   static ref MODE: Mutex<u8> = Mutex::new(1);
-  static ref LA: Mutex<Vec<LINE>> = Mutex::new(Vec::new());
-  static ref LINE: Mutex<Vec<CH>> = Mutex::new(Vec::new());
+  static ref TEXT: Mutex<Vec<Vec<CH>>> = Mutex::new(Vec::new());
   static ref POS: Mutex<POINT> = Mutex::new(POINT{x:0, y:0});
   static ref CHX: Mutex<LONG> = Mutex::new(0);
   static ref CHY: Mutex<LONG> = Mutex::new(0);
@@ -74,6 +73,41 @@ fn to_wstring(str : &str) -> Vec<u16>
   let v : Vec<u16> =
     OsStr::new(str).encode_wide().chain(Some(0).into_iter()).collect();
   v
+}
+
+fn saveline(c: CH)
+{
+  let x = c.x; 
+  let y = c.y; 
+
+  let y_length = {TEXT.lock().unwrap().len()};
+
+  match y_length
+  {
+    0 =>
+    {
+      let mut line = Vec::new();
+      line.push(c);
+      TEXT.lock().unwrap().push(line);
+      if y == 0
+      {
+      }
+    },
+    _ =>
+    {
+      let mut line = &TEXT.lock().unwrap()[y as usize];
+      let x_length = line.len();
+      match x_length
+      {
+        0 =>
+        {
+        },
+        _ =>
+        {
+        },
+      }
+    },
+  }
 }
 
 fn drawtext(w :HWND, f :HFONT, mut c :CH, p :WPARAM, l :LPARAM)
@@ -108,14 +142,14 @@ fn drawtext(w :HWND, f :HFONT, mut c :CH, p :WPARAM, l :LPARAM)
     user::ReleaseDC(w, dc);
   }
 
-  // LINE.lock().unwrap().push(c);
+  saveline(c);
 }
 
 fn key_up(w :HWND)
 {
-  unsafe{user::HideCaret(w)};
   let y = {POS.lock().unwrap().y};
   if y == 0 {return;}
+  unsafe{user::HideCaret(w)};
   POS.lock().unwrap().y -= 1;
   showcaret(w);
 }
@@ -129,12 +163,18 @@ fn key_down(w :HWND)
 
 fn key_left(w :HWND)
 {
-  // println!("key_left");
+  let x = {POS.lock().unwrap().x};
+  if x == 0 {return;}
+  unsafe{user::HideCaret(w)};
+  POS.lock().unwrap().x -= 1;
+  showcaret(w);
 }
 
 fn key_right(w :HWND)
 {
-  // println!("key_right");
+  unsafe{user::HideCaret(w)};
+  POS.lock().unwrap().x += 1;
+  showcaret(w);
 }
 
 fn showcaret(w :HWND)
@@ -201,12 +241,16 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
   match p 
   {
     // backspace
-    0x08 => println!("0x08"),
-    // enter // println!("0x0D"), 
+    0x08 => 
+    {
+    },
+    // enter 
     0x0D => 
     {
+      unsafe{user::HideCaret(w)};
       POS.lock().unwrap().x = 0;
       POS.lock().unwrap().y += 1;
+      showcaret(w);
     },
     // esc   // println!("0x1B"),
     0x1B => 
