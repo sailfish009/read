@@ -38,7 +38,7 @@ extern crate winapi;
 
 use winapi::um::winuser as user;     
 use winapi::um::wingdi as gdi;
-use winapi::shared::windef::{HWND, HMENU, HBRUSH, HICON, HFONT, HGDIOBJ, HBITMAP, HDC, POINT};        
+use winapi::shared::windef::{HWND, HMENU, HBRUSH, HICON, HFONT, HGDIOBJ, HBITMAP, HDC, RECT, POINT};        
 use winapi::shared::minwindef::{HINSTANCE, INT, UINT, LPINT, DWORD, WPARAM, LPARAM, LRESULT, LPVOID };        
 use user::{WS_OVERLAPPEDWINDOW, WS_VISIBLE, WNDCLASSW, LPCREATESTRUCTW};        
 use winapi::um::winnt::{LPCWSTR, LONG};
@@ -49,7 +49,7 @@ use std::string::String;
 use std::sync::Mutex;
 use std::iter::Zip;
 
-struct CH {x: LONG,  y: LONG, c: char, w: INT}
+struct CH {i :LONG, x :LONG,  y :LONG, c :char, w :INT}
 
 lazy_static!
 {
@@ -75,28 +75,23 @@ fn to_wstring(str : &str) -> Vec<u16>
   v
 }
 
-fn printline(i :usize)
+fn modline(method :u8)
 {
-  let vec = TEXT.lock().unwrap();
-  for val in vec.iter()
-  {
-    print!("{0}", val.c);
-  }
-  println!("");
-}
-
-fn modline(p :POINT, method :u8)
-{
-  let mut x = p.x as usize;
-  let mut y = p.y as usize;
-
-  let mut vec = TEXT.lock().unwrap();
+  // let mut x = p.x as usize;
+  let mut x = {*CHX.lock().unwrap()} as usize;
+  let mut y = {POS.lock().unwrap().y} as usize;
+  let mut vec = {TEXT.lock().unwrap()};
 
   match method
   {
     // delete
     0 =>
     {
+      if vec.len() == 0 
+      {
+        return;
+      }
+
       {
         let mut real_pos = 0;
         let mut iter = vec.iter().enumerate()
@@ -117,11 +112,14 @@ fn modline(p :POINT, method :u8)
         }
       }
       vec.remove(x);
+      // println!("x: {0}, y: {1}", x, y);
+      // for val in vec.iter() {print!("{0}", val.c);}
+      // println!("");
     },
     // enter
     1 =>
     {
-      let ch = CH{x:0,y:0,c:'\r',w:0};
+      let ch = CH{i:0,x:0,y:0,c:'\r',w:0};
       vec.push(ch);
     },
     _ => {},
@@ -151,20 +149,21 @@ fn drawtext(w :HWND, f :HFONT, mut c :CH, p :WPARAM, l :LPARAM)
           let string :String = c.c.to_string();
           let ch = to_wstring(&string);
           let mut char_w : INT = 0;
-          let ch_height = *CHY.lock().unwrap();
+          let ch_height = {*CHY.lock().unwrap()};
+          c.i = {*CHX.lock().unwrap()};
           c.x = POS.lock().unwrap().x;
           c.y = POS.lock().unwrap().y;
           gdi::GetCharWidth32W(dc, 0 as UINT, 0 as UINT, &mut char_w); 
           c.w = char_w;
           gdi::TextOutW(dc, c.x, c.y * ch_height, ch.as_ptr(), 1);
           POS.lock().unwrap().x += char_w;
+          *CHX.lock().unwrap() += 1;
         }
       },
-      _ => (),
+      _ => {},
     }
     user::ReleaseDC(w, dc);
   }
-
   saveline(c);
 }
 
@@ -186,10 +185,20 @@ fn key_down(w :HWND)
 
 fn key_left(w :HWND)
 {
-  let x = {POS.lock().unwrap().x};
+  let x = {*CHX.lock().unwrap()};
   if x == 0 {return;}
+  // unsafe{user::HideCaret(w)};
+  *CHX.lock().unwrap() -= 1;
   unsafe{user::HideCaret(w)};
-  POS.lock().unwrap().x -= 1;
+  {
+    let x = {*CHX.lock().unwrap()};
+    let y = {POS.lock().unwrap().y};
+    let char_y = {*CHY.lock().unwrap()};
+    let ch = {&TEXT.lock().unwrap()[x as usize]};
+    let rect = RECT{left:ch.x, top:(ch.y*char_y),right:(ch.x+ch.w),bottom:(ch.y*char_y+char_y)};
+    unsafe {user::InvalidateRect(w, &rect, 1);}
+    POS.lock().unwrap().x -= ch.w;
+  }
   showcaret(w);
 }
 
@@ -266,14 +275,15 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
     // backspace
     0x08 => 
     {
-      printline(0);
+      key_left(w);
+      modline(0);
     },
     // enter 
     0x0D => 
     {
-      let point = {*POS.lock().unwrap()};
-      modline(point, 1);
+      modline(1);
       unsafe{user::HideCaret(w)};
+      *CHX.lock().unwrap() = 0;
       POS.lock().unwrap().x = 0;
       POS.lock().unwrap().y += 1;
       showcaret(w);
@@ -289,7 +299,7 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
     {
       user::HideCaret(w);
       let d = std::char::from_u32_unchecked(p as u32);
-      let ch = CH{x:0,y:0,c:d,w:0};
+      let ch = CH{i:0, x:0,y:0,c:d,w:0};
       drawtext(w, f, ch, 0, 0);  
       showcaret(w);
     },
@@ -401,7 +411,7 @@ fn main()
     user::CreateCaret(hwnd, 0 as HBITMAP, 1, tm.tmHeight);
     showcaret(hwnd);
 
-    *CHX.lock().unwrap() = tm.tmAveCharWidth;
+    // *CHX.lock().unwrap() = tm.tmAveCharWidth;
     *CHY.lock().unwrap() = tm.tmHeight;
 
     // background
