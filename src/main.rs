@@ -55,7 +55,7 @@ lazy_static!
 {
   // MODE:  0: edit,  1: save 
   static ref MODE: Mutex<u8> = Mutex::new(1);
-  static ref TEXT: Mutex<Vec<Vec<CH>>> = Mutex::new(Vec::new());
+  static ref TEXT: Mutex<Vec<CH>> = Mutex::new(Vec::new());
   static ref POS: Mutex<POINT> = Mutex::new(POINT{x:0, y:0});
   static ref CHX: Mutex<LONG> = Mutex::new(0);
   static ref CHY: Mutex<LONG> = Mutex::new(0);
@@ -75,39 +75,62 @@ fn to_wstring(str : &str) -> Vec<u16>
   v
 }
 
-fn saveline(c: CH)
+fn printline(i :usize)
 {
-  let x = c.x; 
-  let y = c.y; 
-
-  let y_length = {TEXT.lock().unwrap().len()};
-
-  match y_length
+  let vec = TEXT.lock().unwrap();
+  for val in vec.iter()
   {
+    print!("{0}", val.c);
+  }
+  println!("");
+}
+
+fn modline(p :POINT, method :u8)
+{
+  let mut x = p.x as usize;
+  let mut y = p.y as usize;
+
+  let mut vec = TEXT.lock().unwrap();
+
+  match method
+  {
+    // delete
     0 =>
     {
-      let mut line = Vec::new();
-      line.push(c);
-      TEXT.lock().unwrap().push(line);
-      if y == 0
       {
+        let mut real_pos = 0;
+        let mut iter = vec.iter().enumerate()
+          .filter_map(|e| if (*e.1).c == '\r' {Some(e.0)} else {None});
+
+        for i in 0..(y+1)
+        {
+          let index = iter.next(); 
+          if None != index
+          {
+            real_pos += index.unwrap();
+          }
+        }
+
+        if y != 0
+        {
+          x += real_pos;
+        }
       }
+      vec.remove(x);
     },
-    _ =>
+    // enter
+    1 =>
     {
-      let mut line = &TEXT.lock().unwrap()[y as usize];
-      let x_length = line.len();
-      match x_length
-      {
-        0 =>
-        {
-        },
-        _ =>
-        {
-        },
-      }
+      let ch = CH{x:0,y:0,c:'\r',w:0};
+      vec.push(ch);
     },
+    _ => {},
   }
+}
+
+fn saveline(c :CH)
+{
+  TEXT.lock().unwrap().push(c);
 }
 
 fn drawtext(w :HWND, f :HFONT, mut c :CH, p :WPARAM, l :LPARAM)
@@ -243,10 +266,13 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
     // backspace
     0x08 => 
     {
+      printline(0);
     },
     // enter 
     0x0D => 
     {
+      let point = {*POS.lock().unwrap()};
+      modline(point, 1);
       unsafe{user::HideCaret(w)};
       POS.lock().unwrap().x = 0;
       POS.lock().unwrap().y += 1;
@@ -276,7 +302,7 @@ pub unsafe extern "system" fn window_proc(w :HWND,
   if msg == user::WM_CREATE
   {
     let param = &*(l as LPCREATESTRUCTW);
-    user::SetWindowLongPtrW(w, user::GWLP_USERDATA,  param.lpCreateParams as i32);
+    user::SetWindowLongPtrW(w, user::GWLP_USERDATA,  param.lpCreateParams as isize);
   }
 
   match msg 
@@ -379,7 +405,7 @@ fn main()
     *CHY.lock().unwrap() = tm.tmHeight;
 
     // background
-    let brush = gdi::CreateSolidBrush(gdi::RGB(R_B,G_B,B_B)) as i32;
+    let brush = gdi::CreateSolidBrush(gdi::RGB(R_B,G_B,B_B)) as isize;
     user::SetClassLongPtrW(hwnd, user::GCLP_HBRBACKGROUND, brush);
     user::MoveWindow(hwnd, SX, SY, W, H, 1);
 
