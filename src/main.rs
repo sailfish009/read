@@ -75,9 +75,8 @@ fn to_wstring(str : &str) -> Vec<u16>
   v
 }
 
-fn modline(method :u8)
+fn modline(w :HWND, method :u8)
 {
-  // let mut x = p.x as usize;
   let mut x = {*CHX.lock().unwrap()} as usize;
   let mut y = {POS.lock().unwrap().y} as usize;
   let mut vec = {TEXT.lock().unwrap()};
@@ -87,34 +86,43 @@ fn modline(method :u8)
     // delete
     0 =>
     {
-      if vec.len() == 0 
+      if (vec.len() == 0) || (x == 0)
       {
         return;
       }
 
+      println!("x: {0}", x);
+      x -= 1;
+      *CHX.lock().unwrap() -= 1;
+
+      let mut real_pos = 0;
       {
-        let mut real_pos = 0;
         let mut iter = vec.iter().enumerate()
           .filter_map(|e| if (*e.1).c == '\r' {Some(e.0)} else {None});
 
-        for i in 0..(y+1)
-        {
-          let index = iter.next(); 
-          if None != index
-          {
-            real_pos += index.unwrap();
-          }
-        }
-
         if y != 0
         {
-          x += real_pos;
+          for i in 0..y
+          {
+            let index = iter.next(); 
+            if (None != index) && (i == (y-1))
+            {
+              real_pos = index.unwrap();
+            }
+          }
+          x += real_pos + 1;
         }
       }
+      println!("x: {0}, len:{1}", x, vec.len());
+      // let ch = &vec[x];
+      let char_y = {*CHY.lock().unwrap()};
+      let rect = RECT{left:vec[x].x, top:(vec[x].y*char_y),right:(vec[x].x+vec[x].w),bottom:(vec[x].y*char_y+char_y)};
+      unsafe{user::HideCaret(w)};
+      unsafe {user::InvalidateRect(w, &rect, 1);}
+      POS.lock().unwrap().x -= vec[x].w;
+      showcaret(w);
       vec.remove(x);
-      // println!("x: {0}, y: {1}", x, y);
-      // for val in vec.iter() {print!("{0}", val.c);}
-      // println!("");
+      // for val in vec.iter() {print!("[{0}]", val.c as u8);} println!{""};
     },
     // enter
     1 =>
@@ -185,21 +193,9 @@ fn key_down(w :HWND)
 
 fn key_left(w :HWND)
 {
-  let x = {*CHX.lock().unwrap()};
-  if x == 0 {return;}
-  // unsafe{user::HideCaret(w)};
-  *CHX.lock().unwrap() -= 1;
-  unsafe{user::HideCaret(w)};
-  {
-    let x = {*CHX.lock().unwrap()};
-    let y = {POS.lock().unwrap().y};
-    let char_y = {*CHY.lock().unwrap()};
-    let ch = {&TEXT.lock().unwrap()[x as usize]};
-    let rect = RECT{left:ch.x, top:(ch.y*char_y),right:(ch.x+ch.w),bottom:(ch.y*char_y+char_y)};
-    unsafe {user::InvalidateRect(w, &rect, 1);}
-    POS.lock().unwrap().x -= ch.w;
-  }
-  showcaret(w);
+  // let x = {*CHX.lock().unwrap()};
+  // if x == 0 {return;}
+  // *CHX.lock().unwrap() -= 1;
 }
 
 fn key_right(w :HWND)
@@ -276,12 +272,13 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
     0x08 => 
     {
       key_left(w);
-      modline(0);
+      modline(w,0);
+
     },
     // enter 
     0x0D => 
     {
-      modline(1);
+      modline(w,1);
       unsafe{user::HideCaret(w)};
       *CHX.lock().unwrap() = 0;
       POS.lock().unwrap().x = 0;
