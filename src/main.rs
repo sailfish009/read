@@ -39,7 +39,7 @@ extern crate winapi;
 use winapi::um::winuser as user;     
 use winapi::um::wingdi as gdi;
 use winapi::shared::windef::{HWND, HMENU, HBRUSH, HICON, HFONT, HGDIOBJ, HBITMAP, HDC, RECT, POINT};        
-use winapi::shared::minwindef::{HINSTANCE, INT, UINT, LPINT, DWORD, WPARAM, LPARAM, LRESULT, LPVOID };        
+use winapi::shared::minwindef::{HINSTANCE, INT, UINT, DWORD, WPARAM, LPARAM, LRESULT, LPVOID };        
 use user::{WS_OVERLAPPEDWINDOW, WS_VISIBLE, WNDCLASSW, LPCREATESTRUCTW};        
 use winapi::um::winnt::{LPCWSTR, LONG};
 use std::os::windows::ffi::OsStrExt;
@@ -47,7 +47,13 @@ use std::ffi::OsStr;
 use std::ptr;
 use std::string::String;
 use std::sync::Mutex;
-use std::iter::Zip;
+use std::thread;
+use std::io::Read;
+use std::io::Write;
+use std::io::prelude::*;
+use std::fs;
+use std::fs::File;
+// use std::iter::Zip;
 
 struct CH {i :LONG, x :LONG,  y :LONG, c :char, w :INT}
 
@@ -61,12 +67,12 @@ lazy_static!
   static ref CHY: Mutex<LONG> = Mutex::new(0);
 }
 
-fn to_wchar(str : &str) -> *const u16 
-{
-  let v : Vec<u16> =
-    OsStr::new(str).encode_wide().chain(Some(0).into_iter()).collect();
-  v.as_ptr()
-}
+// fn to_wchar(str : &str) -> *const u16 
+// {
+//   let v : Vec<u16> =
+//     OsStr::new(str).encode_wide().chain(Some(0).into_iter()).collect();
+//   v.as_ptr()
+// }
 
 fn to_wstring(str : &str) -> Vec<u16> 
 {
@@ -75,13 +81,86 @@ fn to_wstring(str : &str) -> Vec<u16>
   v
 }
 
-fn modline(w :HWND, method :u8)
+// file
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+fn fileio(w :HWND, f :HFONT, path :String, mode :u8)
+{
+  match mode
+  {
+    // read 
+    0 =>
+    {
+      // let mut file = File::open(path).expect("Unable to open");
+      let mut result = File::open(path);
+
+      match result
+      {
+        Ok(mut result) =>
+        {
+          clear();
+          clearscreen(w);
+          *POS.lock().unwrap() = POINT{x:0, y:0};
+
+          let mut buffer = String::new();
+          result.read_to_string(&mut buffer);
+
+          for c in buffer.chars()
+          {
+            match c
+            {
+              '\r' =>
+              {
+                let ch = CH{i:0, x:0,y:0,c:c,w:0};
+                save(ch);
+                *CHX.lock().unwrap() = 0;
+                POS.lock().unwrap().x = 0;
+                POS.lock().unwrap().y += 1;
+              },
+              '\n' =>{},
+              _ => 
+              { 
+                let mut ch = CH{i:0, x:0,y:0,c:c,w:0};
+                drawtext(w, f, ch, 0); 
+              },
+            }
+          }
+        },
+        // file open failed.
+        _ => 
+        {
+          println!("file error");
+        },
+      }
+
+    },
+    // write
+    _ =>
+    {
+    },
+
+  }
+}
+
+
+// gui
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+fn clearscreen(w :HWND)
+{
+  // bug? call RedrawWindow() only should be work.
+  // work around: call InvalidateRect() and call RedrawWindow()
+  unsafe{user::InvalidateRect(w, ptr::null_mut(), 1);}
+  unsafe{user::RedrawWindow(w, ptr::null_mut(), ptr::null_mut(), user::RDW_INVALIDATE | user::RDW_UPDATENOW);}
+}
+
+fn line(w :HWND, mode :u8)
 {
   let mut x = {*CHX.lock().unwrap()} as usize;
-  let mut y = {POS.lock().unwrap().y} as usize;
+  let y = {POS.lock().unwrap().y} as usize;
   let mut vec = {TEXT.lock().unwrap()};
 
-  match method
+  match mode
   {
     // delete
     0 =>
@@ -96,22 +175,19 @@ fn modline(w :HWND, method :u8)
       *CHX.lock().unwrap() -= 1;
 
       let mut real_pos = 0;
+      if y != 0
       {
         let mut iter = vec.iter().enumerate()
           .filter_map(|e| if (*e.1).c == '\r' {Some(e.0)} else {None});
-
-        if y != 0
+        for i in 0..y
         {
-          for i in 0..y
+          let index = iter.next(); 
+          if (None != index) && (i == (y-1))
           {
-            let index = iter.next(); 
-            if (None != index) && (i == (y-1))
-            {
-              real_pos = index.unwrap();
-            }
+            real_pos = index.unwrap();
           }
-          x += real_pos + 1;
         }
+        x += real_pos + 1;
       }
       println!("x: {0}, len:{1}", x, vec.len());
       // let ch = &vec[x];
@@ -134,12 +210,19 @@ fn modline(w :HWND, method :u8)
   }
 }
 
-fn saveline(c :CH)
+fn clear()
 {
-  TEXT.lock().unwrap().push(c);
+  let mut vec = {TEXT.lock().unwrap()};
+  vec.clear();
 }
 
-fn drawtext(w :HWND, f :HFONT, mut c :CH, p :WPARAM, l :LPARAM)
+fn save(c :CH)
+{
+  let mut vec = {TEXT.lock().unwrap()};
+  vec.push(c);
+}
+
+fn drawtext(w :HWND, f :HFONT, mut c :CH, p :WPARAM)
 {
   unsafe
   {
@@ -152,27 +235,24 @@ fn drawtext(w :HWND, f :HFONT, mut c :CH, p :WPARAM, l :LPARAM)
     {
       0 =>
       {
-        if l == 0
-        {
-          let string :String = c.c.to_string();
-          let ch = to_wstring(&string);
-          let mut char_w : INT = 0;
-          let ch_height = {*CHY.lock().unwrap()};
-          c.i = {*CHX.lock().unwrap()};
-          c.x = POS.lock().unwrap().x;
-          c.y = POS.lock().unwrap().y;
-          gdi::GetCharWidth32W(dc, 0 as UINT, 0 as UINT, &mut char_w); 
-          c.w = char_w;
-          gdi::TextOutW(dc, c.x, c.y * ch_height, ch.as_ptr(), 1);
-          POS.lock().unwrap().x += char_w;
-          *CHX.lock().unwrap() += 1;
-        }
+        let string :String = c.c.to_string();
+        let ch = to_wstring(&string);
+        let mut char_w : INT = 0;
+        let ch_height = {*CHY.lock().unwrap()};
+        c.i = {*CHX.lock().unwrap()};
+        c.x = {POS.lock().unwrap().x};
+        c.y = {POS.lock().unwrap().y};
+        gdi::GetCharWidth32W(dc, 0 as UINT, 0 as UINT, &mut char_w); 
+        c.w = char_w;
+        gdi::TextOutW(dc, c.x, c.y * ch_height, ch.as_ptr(), 1);
+        POS.lock().unwrap().x += char_w;
+        *CHX.lock().unwrap() += 1;
       },
       _ => {},
     }
     user::ReleaseDC(w, dc);
   }
-  saveline(c);
+  save(c);
 }
 
 fn key_up(w :HWND)
@@ -224,13 +304,19 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
     unsafe{user::HideCaret(w)};
     match p 
     {
-      0x0F => println!("0x0F"),
+      // ctrl + o 
+      0x0F => 
+      {
+        let path = String::from("./sample.txt");
+        fileio(w, f, path, 0); 
+        println!("file open");
+      },
       0x13 => println!("0x13"),
       0x02 => println!("0x02"),
       0x03 => println!("0x03"),
       _ => (),
     }
-    println!("GetAsyncKeyState");
+    // println!("GetAsyncKeyState");
     return;
   }
 
@@ -272,20 +358,20 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
     0x08 => 
     {
       key_left(w);
-      modline(w,0);
+      line(w,0);
 
     },
     // enter 
     0x0D => 
     {
-      modline(w,1);
+      line(w,1);
       unsafe{user::HideCaret(w)};
       *CHX.lock().unwrap() = 0;
       POS.lock().unwrap().x = 0;
       POS.lock().unwrap().y += 1;
       showcaret(w);
     },
-    // esc   // println!("0x1B"),
+    // esc
     0x1B => 
     {
       *MODE.lock().unwrap() = 1;
@@ -297,7 +383,7 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
       user::HideCaret(w);
       let d = std::char::from_u32_unchecked(p as u32);
       let ch = CH{i:0, x:0,y:0,c:d,w:0};
-      drawtext(w, f, ch, 0, 0);  
+      drawtext(w, f, ch, 0);  
       showcaret(w);
     },
   }
@@ -319,11 +405,17 @@ pub unsafe extern "system" fn window_proc(w :HWND,
       let font = user::GetWindowLongPtrW(w, user::GWLP_USERDATA) as HFONT;
       edit(w, p, font)
     },
+    user::WM_DROPFILES => 
+    {
+    },
     user::WM_DESTROY => user::PostQuitMessage(0),
     _ => (),
   }
   return user::DefWindowProcW( w, msg, p, l);
 }
+
+// main loop
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 fn main() 
 {
@@ -431,3 +523,5 @@ fn main()
     }
   }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
