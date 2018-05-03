@@ -150,63 +150,10 @@ fn clearscreen(w :HWND)
 {
   // bug? call RedrawWindow() only should be work.
   // work around: call InvalidateRect() and call RedrawWindow()
-  unsafe{user::InvalidateRect(w, ptr::null_mut(), 1);}
-  unsafe{user::RedrawWindow(w, ptr::null_mut(), ptr::null_mut(), user::RDW_INVALIDATE | user::RDW_UPDATENOW);}
-}
-
-fn line(w :HWND, mode :u8)
-{
-  let mut x = {*CHX.lock().unwrap()} as usize;
-  let y = {POS.lock().unwrap().y} as usize;
-  let mut vec = {TEXT.lock().unwrap()};
-
-  match mode
+  unsafe
   {
-    // delete
-    0 =>
-    {
-      if (vec.len() == 0) || (x == 0)
-      {
-        return;
-      }
-
-      println!("x: {0}", x);
-      x -= 1;
-      *CHX.lock().unwrap() -= 1;
-
-      let mut real_pos = 0;
-      if y != 0
-      {
-        let mut iter = vec.iter().enumerate()
-          .filter_map(|e| if (*e.1).c == '\r' {Some(e.0)} else {None});
-        for i in 0..y
-        {
-          let index = iter.next(); 
-          if (None != index) && (i == (y-1))
-          {
-            real_pos = index.unwrap();
-          }
-        }
-        x += real_pos + 1;
-      }
-      println!("x: {0}, len:{1}", x, vec.len());
-      // let ch = &vec[x];
-      let char_y = {*CHY.lock().unwrap()};
-      let rect = RECT{left:vec[x].x, top:(vec[x].y*char_y),right:(vec[x].x+vec[x].w),bottom:(vec[x].y*char_y+char_y)};
-      unsafe{user::HideCaret(w)};
-      unsafe {user::InvalidateRect(w, &rect, 1);}
-      POS.lock().unwrap().x -= vec[x].w;
-      showcaret(w);
-      vec.remove(x);
-      // for val in vec.iter() {print!("[{0}]", val.c as u8);} println!{""};
-    },
-    // enter
-    1 =>
-    {
-      let ch = CH{i:0,x:0,y:0,c:'\r',w:0};
-      vec.push(ch);
-    },
-    _ => {},
+    user::InvalidateRect(w, ptr::null_mut(), 1);
+    user::RedrawWindow(w, ptr::null_mut(), ptr::null_mut(), user::RDW_INVALIDATE | user::RDW_UPDATENOW);
   }
 }
 
@@ -220,6 +167,81 @@ fn save(c :CH)
 {
   let mut vec = {TEXT.lock().unwrap()};
   vec.push(c);
+}
+
+fn getpos() -> Result<usize,usize>
+{
+  let mut x = {*CHX.lock().unwrap()} as usize;
+  let y = {POS.lock().unwrap().y} as usize;
+  let mut vec = {TEXT.lock().unwrap()};
+  if (vec.len() == 0) || (x == 0)
+  {
+    return Err(0);
+  }
+
+  println!("x: {0}", x);
+  x -= 1;
+  *CHX.lock().unwrap() -= 1;
+
+  let mut real_pos = 0;
+  if y != 0
+  {
+    let mut iter = vec.iter().enumerate()
+      .filter_map(|e| if (*e.1).c == '\r' {Some(e.0)} else {None});
+    for i in 0..y
+    {
+      let index = iter.next(); 
+      if (None != index) && (i == (y-1))
+      {
+        real_pos = index.unwrap();
+      }
+    }
+    x += real_pos + 1;
+  }
+  //println!("x: {0}, len:{1}", x, vec.len());
+  Ok(x)
+}
+
+fn getrect(i :usize) -> RECT
+{
+  let mut vec = {TEXT.lock().unwrap()};
+  let char_y = {*CHY.lock().unwrap()};
+  POS.lock().unwrap().x -= vec[i].w;
+  let rect = RECT{left:vec[i].x, top:(vec[i].y*char_y),right:(vec[i].x+vec[i].w),bottom:(vec[i].y*char_y+char_y)};
+  vec.remove(i);
+  rect
+}
+
+fn line(w :HWND, mode :u8)
+{
+  match mode
+  {
+    // delete
+    0 =>
+    {
+      let x = getpos();
+      match x
+      {
+        Ok(x) =>
+        {
+          let rect = getrect(x);
+          // let ch = &vec[x];
+          unsafe{user::HideCaret(w)};
+          unsafe {user::InvalidateRect(w, &rect, 1);}
+          showcaret(w);
+        },
+        _ => {},
+      }
+      // for val in vec.iter() {print!("[{0}]", val.c as u8);} println!{""};
+    },
+    // enter
+    1 =>
+    {
+      let ch = CH{i:0,x:0,y:0,c:'\r',w:0};
+      save(ch);
+    },
+    _ => {},
+  }
 }
 
 fn drawtext(w :HWND, f :HFONT, mut c :CH, p :WPARAM)
