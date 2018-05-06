@@ -36,6 +36,7 @@ const R_B: u8 = 0;   const G_B: u8 = 0;   const B_B: u8 = 0;
 
 extern crate winapi; 
 
+use winapi::um::shellapi as shell;
 use winapi::um::winuser as user;     
 use winapi::um::wingdi as gdi;
 use winapi::shared::windef::{HWND, HMENU, HBRUSH, HICON, HFONT, HGDIOBJ, HBITMAP, HDC, RECT, POINT};        
@@ -47,12 +48,11 @@ use std::ffi::OsStr;
 use std::ptr;
 use std::string::String;
 use std::sync::Mutex;
-use std::thread;
 use std::io::Read;
 use std::io::Write;
-use std::io::prelude::*;
-use std::fs;
 use std::fs::File;
+// use std::io::prelude::*;
+// use std::thread;
 // use std::iter::Zip;
 
 struct CH {i :LONG, x :LONG,  y :LONG, c :char, w :INT}
@@ -142,7 +142,6 @@ fn fileio(w :HWND, f :HFONT, path :String, mode :u8)
   }
 }
 
-
 // gui
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -163,29 +162,54 @@ fn clear()
   vec.clear();
 }
 
+fn remove(i :usize)
+{
+  let mut vec = {TEXT.lock().unwrap()};
+  vec.remove(i);
+}
+
 fn save(c :CH)
 {
   let mut vec = {TEXT.lock().unwrap()};
   vec.push(c);
 }
 
-fn getpos() -> Result<usize,usize>
+fn getlength() -> usize
+{
+  let vec = {TEXT.lock().unwrap()};
+  let length = vec.len();
+  length
+}
+
+fn geti(i :usize) -> LONG 
+{
+  let vec = {TEXT.lock().unwrap()};
+  let index = vec[i].i;
+  index
+}
+
+fn getx(i :usize) -> LONG 
+{
+  let vec = {TEXT.lock().unwrap()};
+  let index = vec[i].x;
+  index
+}
+
+fn getw(i :usize) -> LONG 
+{
+  let vec = {TEXT.lock().unwrap()};
+  let index = vec[i].w;
+  index
+}
+
+fn getindex() -> usize
 {
   let mut x = {*CHX.lock().unwrap()} as usize;
   let y = {POS.lock().unwrap().y} as usize;
-  let mut vec = {TEXT.lock().unwrap()};
-  if (vec.len() == 0) || (x == 0)
-  {
-    return Err(0);
-  }
-
-  println!("x: {0}", x);
-  x -= 1;
-  *CHX.lock().unwrap() -= 1;
-
-  let mut real_pos = 0;
   if y != 0
   {
+    let mut real_pos = 0;
+    let vec = {TEXT.lock().unwrap()};
     let mut iter = vec.iter().enumerate()
       .filter_map(|e| if (*e.1).c == '\r' {Some(e.0)} else {None});
     for i in 0..y
@@ -196,19 +220,64 @@ fn getpos() -> Result<usize,usize>
         real_pos = index.unwrap();
       }
     }
-    x += real_pos + 1;
+    x += real_pos;
   }
-  //println!("x: {0}, len:{1}", x, vec.len());
+  else
+  {
+    x -= 1;
+  }
+  x
+}
+
+
+fn getpos() -> Result<usize,usize>
+{
+  let mut x = {*CHX.lock().unwrap()} as usize;
+  if getlength() == 0
+  {
+    return Err(0);
+  }
+
+  let y = {POS.lock().unwrap().y};
+
+  if x == 0
+  {
+    if y == 0
+    {
+      return Err(0);
+    }
+    x = getindex();
+    let index = geti(x);
+    if index == 0
+    {
+      *CHX.lock().unwrap() = 0;
+      POS.lock().unwrap().x = 0;
+    }
+    else
+    {
+      x -= 1;
+      *CHX.lock().unwrap() = geti(x) + 1;
+      POS.lock().unwrap().x = getx(x) + getw(x);
+      x += 1;
+    }
+    POS.lock().unwrap().y -= 1;
+  }
+  else
+  {
+    x = getindex();
+    *CHX.lock().unwrap() -= 1;
+  }
+
+  //println!("x: {0}, y: {1}, len:{2}", x, y, getlength());
   Ok(x)
 }
 
 fn getrect(i :usize) -> RECT
 {
-  let mut vec = {TEXT.lock().unwrap()};
+  let vec = {TEXT.lock().unwrap()};
   let char_y = {*CHY.lock().unwrap()};
   POS.lock().unwrap().x -= vec[i].w;
   let rect = RECT{left:vec[i].x, top:(vec[i].y*char_y),right:(vec[i].x+vec[i].w),bottom:(vec[i].y*char_y+char_y)};
-  vec.remove(i);
   rect
 }
 
@@ -225,10 +294,13 @@ fn line(w :HWND, mode :u8)
         Ok(x) =>
         {
           let rect = getrect(x);
-          // let ch = &vec[x];
-          unsafe{user::HideCaret(w)};
-          unsafe {user::InvalidateRect(w, &rect, 1);}
+          unsafe
+          {
+            user::HideCaret(w);
+            user::InvalidateRect(w, &rect, 1);
+          }
           showcaret(w);
+          remove(x);
         },
         _ => {},
       }
@@ -237,7 +309,8 @@ fn line(w :HWND, mode :u8)
     // enter
     1 =>
     {
-      let ch = CH{i:0,x:0,y:0,c:'\r',w:0};
+      let index = {*CHX.lock().unwrap()};
+      let ch = CH{i:index,x:0,y:0,c:'\r',w:0};
       save(ch);
     },
     _ => {},
@@ -521,6 +594,8 @@ fn main()
 
     user::CreateCaret(hwnd, 0 as HBITMAP, 1, tm.tmHeight);
     showcaret(hwnd);
+
+    shell::DragAcceptFiles(hwnd, 1);
 
     // *CHX.lock().unwrap() = tm.tmAveCharWidth;
     *CHY.lock().unwrap() = tm.tmHeight;
