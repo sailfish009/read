@@ -40,11 +40,12 @@ use winapi::um::shellapi as shell;
 use winapi::um::winuser as user;     
 use winapi::um::wingdi as gdi;
 use winapi::shared::windef::{HWND, HMENU, HBRUSH, HICON, HFONT, HGDIOBJ, HBITMAP, HDC, RECT, POINT};        
-use winapi::shared::minwindef::{HINSTANCE, INT, UINT, DWORD, WPARAM, LPARAM, LRESULT, LPVOID };        
+use winapi::shared::minwindef::{HINSTANCE, INT, UINT, DWORD, WPARAM, LPARAM, LRESULT, LPVOID, MAX_PATH };        
 use user::{WS_OVERLAPPEDWINDOW, WS_VISIBLE, WNDCLASSW, LPCREATESTRUCTW};        
-use winapi::um::winnt::{LPCWSTR, LONG};
+use winapi::um::winnt::{LPCWSTR, LPWSTR, LONG};
 use std::os::windows::ffi::OsStrExt;
 use std::ffi::OsStr;
+use std::ffi::OsString;
 use std::ptr;
 use std::string::String;
 use std::sync::Mutex;
@@ -91,7 +92,6 @@ fn fileio(w :HWND, f :HFONT, path :String, mode :u8)
     // read 
     0 =>
     {
-      // let mut file = File::open(path).expect("Unable to open");
       let mut result = File::open(path);
 
       match result
@@ -111,7 +111,8 @@ fn fileio(w :HWND, f :HFONT, path :String, mode :u8)
             {
               '\r' =>
               {
-                let ch = CH{i:0, x:0,y:0,c:c,w:0};
+                let index = {POS.lock().unwrap().x};
+                let ch = CH{i:index, x:0,y:0,c:c,w:0};
                 save(ch);
                 *CHX.lock().unwrap() = 0;
                 POS.lock().unwrap().x = 0;
@@ -502,8 +503,36 @@ pub unsafe extern "system" fn window_proc(w :HWND,
     },
     user::WM_DROPFILES => 
     {
+      let hdrop = p as shell::HDROP;
+      let file = shell::DragQueryFileW(hdrop, 0xFFFFFFFF, ptr::null_mut(), 0);
+
+      if file != 1
+      {
+        println!("multiple files not supported");
+        shell::DragFinish(hdrop);
+      }
+      else
+      {
+        let mut v = vec![0u16; MAX_PATH as usize];
+        shell::DragQueryFileW(hdrop, 0, v.as_mut_ptr(), MAX_PATH as u32);
+        shell::DragFinish(hdrop);
+
+        let mut path = String::new();
+        for val in v.iter() 
+        {
+          let c : u8 = (*val & 0xFF) as u8;
+          if c == 0 {break;} else { path.push(c as char);}
+        } 
+        // println!("file path : {:?}", path);
+        let font = user::GetWindowLongPtrW(w, user::GWLP_USERDATA) as HFONT;
+        fileio(w, font, path, 0); 
+      }
     },
-    user::WM_DESTROY => user::PostQuitMessage(0),
+    user::WM_DESTROY => 
+    {
+      shell::DragAcceptFiles(w, 0);
+      user::PostQuitMessage(0);
+    },
     _ => (),
   }
   return user::DefWindowProcW( w, msg, p, l);
