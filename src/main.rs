@@ -30,7 +30,8 @@
 #[macro_use]
 extern crate lazy_static;
 
-const SX: i32 = 200; const SY: i32 = 200; const W:  i32 = 800;   const H:i32 = 600;
+const SX: i32 = 200; const SY: i32 = 200; const W:  i32 = 800; const H:  i32 = 600;
+const L:   u8 = 0;   const R:   u8 = 1;   const U:   u8 = 2;   const D:   u8 = 3;
 const R_A: u8 = 250; const G_A: u8 = 250; const B_A: u8 = 250;
 const R_B: u8 = 0;   const G_B: u8 = 0;   const B_B: u8 = 0;
 
@@ -87,31 +88,32 @@ fn to_wstring(str : &str) -> Vec<u16>
 
 fn fileio(w :HWND, f :HFONT, path :String, mode :u8)
 {
-  match mode
-  {
-    // read 
-    0 =>
-    {
-      let mut result = File::open(path);
+  let mut result = File::open(path);
 
-      match result
+  match result
+  {
+    Ok(mut result) =>
+    {
+      match mode
       {
-        Ok(mut result) =>
+        // read 
+        0 =>
         {
+          unsafe{user::HideCaret(w);}
           clear();
           clearscreen(w);
           *POS.lock().unwrap() = POINT{x:0, y:0};
-
+    
           let mut buffer = String::new();
           result.read_to_string(&mut buffer);
-
+    
           for c in buffer.chars()
           {
             match c
             {
               '\r' =>
               {
-                let index = {POS.lock().unwrap().x};
+                let index = {*CHX.lock().unwrap()};
                 let ch = CH{i:index, x:0,y:0,c:c,w:0};
                 save(ch);
                 *CHX.lock().unwrap() = 0;
@@ -126,21 +128,21 @@ fn fileio(w :HWND, f :HFONT, path :String, mode :u8)
               },
             }
           }
+          showcaret(w);
         },
-        // file open failed.
-        _ => 
+        // write
+        _ =>
         {
-          println!("file error");
         },
       }
-
     },
-    // write
-    _ =>
+    // file open failed.
+    _ => 
     {
+      println!("file error");
     },
-
   }
+
 }
 
 // gui
@@ -196,6 +198,13 @@ fn getx(i :usize) -> LONG
   index
 }
 
+fn getc(i :usize) -> char 
+{
+  let vec = {TEXT.lock().unwrap()};
+  let c = vec[i].c;
+  c 
+}
+
 fn getw(i :usize) -> LONG 
 {
   let vec = {TEXT.lock().unwrap()};
@@ -203,7 +212,7 @@ fn getw(i :usize) -> LONG
   index
 }
 
-fn getindex() -> usize
+fn getindex(direction :u8) -> usize
 {
   let mut x = {*CHX.lock().unwrap()} as usize;
   let y = {POS.lock().unwrap().y} as usize;
@@ -227,9 +236,30 @@ fn getindex() -> usize
   {
     x -= 1;
   }
+
+  match direction
+  {
+    // <- (left)
+    0 => 
+    {
+    },
+    // -> (right)
+    1 => 
+    {
+      x += 1;
+    },
+    // -> (up)
+    2 => 
+    {
+    },
+    // -> (down)
+    3 => 
+    {
+    },
+    _=> {},
+  }
   x
 }
-
 
 fn getpos() -> Result<usize,usize>
 {
@@ -247,7 +277,7 @@ fn getpos() -> Result<usize,usize>
     {
       return Err(0);
     }
-    x = getindex();
+    x = getindex(L);
     let index = geti(x);
     if index == 0
     {
@@ -265,7 +295,7 @@ fn getpos() -> Result<usize,usize>
   }
   else
   {
-    x = getindex();
+    x = getindex(L);
     *CHX.lock().unwrap() -= 1;
   }
 
@@ -369,16 +399,35 @@ fn key_down(w :HWND)
 
 fn key_left(w :HWND)
 {
-  // let x = {*CHX.lock().unwrap()};
-  // if x == 0 {return;}
-  // *CHX.lock().unwrap() -= 1;
+  let x = {*CHX.lock().unwrap()};
+  if x == 0 {return;}
+  let index = getindex(L);
+  unsafe{user::HideCaret(w)};
+  *CHX.lock().unwrap() -= 1;
+  POS.lock().unwrap().x = getx(index);
+  showcaret(w);
 }
 
 fn key_right(w :HWND)
 {
-  unsafe{user::HideCaret(w)};
-  POS.lock().unwrap().x += 1;
-  showcaret(w);
+  let index = getindex(R);
+  let i = geti(index);
+  let x = {*CHX.lock().unwrap()};
+  if getc(index) == '\r' {return;}
+  else if (getc(index+1) == '\r') && (i != 0) 
+  {
+    unsafe{user::HideCaret(w)};
+    POS.lock().unwrap().x = getx(index) + getw(index);
+    *CHX.lock().unwrap() += 1;
+    showcaret(w);
+  }
+  else
+  {
+    unsafe{user::HideCaret(w)};
+    POS.lock().unwrap().x = getx(index+1);
+    *CHX.lock().unwrap() += 1;
+    showcaret(w);
+  }
 }
 
 fn showcaret(w :HWND)
@@ -453,9 +502,7 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
     // backspace
     0x08 => 
     {
-      key_left(w);
       line(w,0);
-
     },
     // enter 
     0x0D => 
