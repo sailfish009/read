@@ -31,6 +31,7 @@
 extern crate lazy_static;
 
 const SX: i32 = 200; const SY: i32 = 200; const W:  i32 = 800; const H:  i32 = 600;
+const L:   u8 = 0;   const R:   u8 = 1;   const U:   u8 = 2;   const D:   u8 = 3;
 const R_A: u8 = 250; const G_A: u8 = 250; const B_A: u8 = 250;
 const R_B: u8 = 0;   const G_B: u8 = 0;   const B_B: u8 = 0;
 
@@ -66,7 +67,6 @@ lazy_static!
   static ref POS: Mutex<POINT> = Mutex::new(POINT{x:0, y:0});
   static ref CHX: Mutex<LONG> = Mutex::new(0);
   static ref CHY: Mutex<LONG> = Mutex::new(0);
-  static ref END: Mutex<u8> = Mutex::new(0);
 }
 
 // fn to_wchar(str : &str) -> *const u16 
@@ -114,8 +114,7 @@ fn fileio(w :HWND, f :HFONT, path :String, mode :u8)
               '\r' =>
               {
                 let index = {*CHX.lock().unwrap()};
-                let cx = {POS.lock().unwrap().x};
-                let ch = CH{i:index, x:cx, y:0,c:c,w:0};
+                let ch = CH{i:index, x:0,y:0,c:c,w:0};
                 save(ch);
                 *CHX.lock().unwrap() = 0;
                 POS.lock().unwrap().x = 0;
@@ -130,8 +129,6 @@ fn fileio(w :HWND, f :HFONT, path :String, mode :u8)
             }
           }
           showcaret(w);
-          *CHX.lock().unwrap() -= 1;
-          *END.lock().unwrap() = 1;
         },
         // write
         _ =>
@@ -325,8 +322,7 @@ fn line(w :HWND, mode :u8)
     1 =>
     {
       let index = {*CHX.lock().unwrap()};
-      let cx = {POS.lock().unwrap().x};
-      let ch = CH{i:index,x:cx,y:0,c:'\r',w:0};
+      let ch = CH{i:index,x:0,y:0,c:'\r',w:0};
       save(ch);
     },
     _ => {},
@@ -387,25 +383,21 @@ fn key_left(w :HWND)
   let x = {*CHX.lock().unwrap()};
   if x == 0 {return;}
   let mut index = getindex();
-  let end = {*END.lock().unwrap()};
-
-  if end == 1
+  if (index+1) == getlength()
   {
-    index = getindex();
     unsafe{user::HideCaret(w)};
-    POS.lock().unwrap().x = getx(index);
+    POS.lock().unwrap().x = getx(index) + getw(index);
     showcaret(w);
-    *END.lock().unwrap() = 0;
   }
   else
   {
     *CHX.lock().unwrap() -= 1;
     index = getindex();
+    println!("index: {0}", index);
     unsafe{user::HideCaret(w)};
     POS.lock().unwrap().x = getx(index);
     showcaret(w);
   }
-
 }
 
 fn key_right(w :HWND)
@@ -416,23 +408,29 @@ fn key_right(w :HWND)
     unsafe{user::HideCaret(w)};
     POS.lock().unwrap().x = getx(index) + getw(index);
     showcaret(w);
-    *END.lock().unwrap() = 1;
     return;
   }
-
-  if getc(index) == '\r'
+  let i = geti(index);
+  let x = {*CHX.lock().unwrap()};
+  if getc(index) == '\r' {return;}
+  else if (getc(index+1) == '\r') && (i != 0)
   {
+    println!("index 1: {0}", index);
+    unsafe{user::HideCaret(w)};
+    POS.lock().unwrap().x = getx(index) + getw(index);
+    *CHX.lock().unwrap() += 1;
+    showcaret(w);
+  }
+  else
+  {
+    println!("index 2: {0}", index);
+    *CHX.lock().unwrap() += 1;
+    index = getindex();
+    println!("index: {0}", index);
     unsafe{user::HideCaret(w)};
     POS.lock().unwrap().x = getx(index);
     showcaret(w);
-    return;
   }
-
-  *CHX.lock().unwrap() += 1;
-  index = getindex();
-  unsafe{user::HideCaret(w)};
-  POS.lock().unwrap().x = getx(index);
-  showcaret(w);
 }
 
 fn showcaret(w :HWND)
