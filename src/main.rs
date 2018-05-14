@@ -56,7 +56,7 @@ use std::fs::File;
 // use std::thread;
 // use std::iter::Zip;
 
-struct CH {i :LONG, x :LONG,  y :LONG, c :char, w :INT}
+struct CH {x :LONG,  y :LONG, c :char}
 
 lazy_static!
 {
@@ -67,6 +67,7 @@ lazy_static!
   static ref CHX: Mutex<LONG> = Mutex::new(0);
   static ref CHY: Mutex<LONG> = Mutex::new(0);
   static ref END: Mutex<u8> = Mutex::new(0);
+  static ref DEX: Mutex<u8> = Mutex::new(0);
 }
 
 // fn to_wchar(str : &str) -> *const u16 
@@ -113,24 +114,22 @@ fn fileio(w :HWND, f :HFONT, path :String, mode :u8)
             {
               '\r' =>
               {
-                let index = {*CHX.lock().unwrap()};
                 let cx = {POS.lock().unwrap().x};
-                let ch = CH{i:index, x:cx, y:0,c:c,w:0};
+                let cy = {POS.lock().unwrap().y};
+                let ch = CH{x:cx, y:cy,c:c};
                 save(ch);
-                *CHX.lock().unwrap() = 0;
                 POS.lock().unwrap().x = 0;
                 POS.lock().unwrap().y += 1;
               },
               '\n' =>{},
               _ => 
               { 
-                let mut ch = CH{i:0, x:0,y:0,c:c,w:0};
+                let mut ch = CH{x:0,y:0,c:c};
                 drawtext(w, f, ch, 0); 
               },
             }
           }
           showcaret(w);
-          *CHX.lock().unwrap() -= 1;
           *END.lock().unwrap() = 1;
         },
         // write
@@ -187,17 +186,17 @@ fn getlength() -> usize
   length
 }
 
-fn geti(i :usize) -> LONG 
-{
-  let vec = {TEXT.lock().unwrap()};
-  let index = vec[i].i;
-  index
-}
-
 fn getx(i :usize) -> LONG 
 {
   let vec = {TEXT.lock().unwrap()};
   let index = vec[i].x;
+  index
+}
+
+fn gety(i :usize) -> LONG 
+{
+  let vec = {TEXT.lock().unwrap()};
+  let index = vec[i].y;
   index
 }
 
@@ -208,22 +207,16 @@ fn getc(i :usize) -> char
   c 
 }
 
-fn getw(i :usize) -> LONG 
-{
-  let vec = {TEXT.lock().unwrap()};
-  let index = vec[i].w;
-  index
-}
-
 fn getindex() -> usize
 {
-  let mut x = {*CHX.lock().unwrap()} as usize;
+  let mut x = {POS.lock().unwrap().x} as usize;
   let y = {POS.lock().unwrap().y} as usize;
 
   match y
   {
     0 =>
     {
+      if x !=0 {x -= 1};
     },
     _ =>
     {
@@ -239,60 +232,63 @@ fn getindex() -> usize
           real_pos = index.unwrap();
         }
       }
-      x += real_pos + 1;
+      x += real_pos;
     },
   }
   x
 }
 
-fn getpos() -> Result<usize,usize>
+fn backspace() -> Result<usize,usize>
 {
-  let mut x = {*CHX.lock().unwrap()} as usize;
   if getlength() == 0
   {
+    println!("len:{0}", getlength());
     return Err(0);
   }
 
+  let mut x = {POS.lock().unwrap().x} as usize;
   let y = {POS.lock().unwrap().y};
 
   if x == 0
   {
-    if y == 0
+    *DEX.lock().unwrap() += 1;
+    let count_0 = {*DEX.lock().unwrap()};
+    match count_0
     {
-      return Err(0);
+      2 =>
+      {
+        x = getindex() - 1;
+        POS.lock().unwrap().x = getx(x);
+        POS.lock().unwrap().y -= 1;
+        *DEX.lock().unwrap() = 0;
+      },
+      _ => 
+      {
+        x = getindex();
+        println!("[x == 0 0] x: {0}, y: {1}, len:{2}", x, y, getlength());
+      },
     }
-    x = getindex();
-    let index = geti(x);
-    if index == 0
-    {
-      *CHX.lock().unwrap() = 0;
-      POS.lock().unwrap().x = 0;
-    }
-    else
-    {
-      x -= 1;
-      *CHX.lock().unwrap() = geti(x) + 1;
-      POS.lock().unwrap().x = getx(x) + getw(x);
-      x += 1;
-    }
-    POS.lock().unwrap().y -= 1;
   }
   else
   {
     x = getindex();
-    *CHX.lock().unwrap() -= 1;
+    println!("[x != 0] x: {0}, y: {1}, len:{2}", x, y, getlength());
+    POS.lock().unwrap().x -= 1;
   }
 
-  //println!("x: {0}, y: {1}, len:{2}", x, y, getlength());
-  Ok(x)
+  println!("x: {0}, y: {1}, len:{2}", x, y, getlength());
+
+  // Ok(x)
+  Err(0)
 }
+
 
 fn getrect(i :usize) -> RECT
 {
   let vec = {TEXT.lock().unwrap()};
-  let char_y = {*CHY.lock().unwrap()};
-  POS.lock().unwrap().x -= vec[i].w;
-  let rect = RECT{left:vec[i].x, top:(vec[i].y*char_y),right:(vec[i].x+vec[i].w),bottom:(vec[i].y*char_y+char_y)};
+  let ch_w = {*CHX.lock().unwrap()};
+  let ch_h = {*CHY.lock().unwrap()};
+  let rect = RECT{left:vec[i].x, top:(vec[i].y*ch_h),right:(vec[i].x+ch_w),bottom:(vec[i].y*ch_h+ch_h)};
   rect
 }
 
@@ -303,30 +299,30 @@ fn line(w :HWND, mode :u8)
     // delete
     0 =>
     {
-    //  let x = getpos();
-    //  match x
-    //  {
-    //    Ok(x) =>
-    //    {
-    //      let rect = getrect(x);
-    //      unsafe
-    //      {
-    //        user::HideCaret(w);
-    //        user::InvalidateRect(w, &rect, 1);
-    //      }
-    //      showcaret(w);
-    //      remove(x);
-    //    },
-    //    _ => {},
-    //  }
-    //  // for val in vec.iter() {print!("[{0}]", val.c as u8);} println!{""};
+      let x = backspace();
+      match x
+      {
+        Ok(x) =>
+        {
+          let rect = getrect(x);
+          unsafe
+          {
+            user::HideCaret(w);
+            user::InvalidateRect(w, &rect, 1);
+          }
+          showcaret(w);
+          remove(x);
+        },
+        _ => {},
+      }
+      // for val in vec.iter() {print!("[{0}]", val.c as u8);} println!{""};
     },
     // enter
     1 =>
     {
-      let index = {*CHX.lock().unwrap()};
       let cx = {POS.lock().unwrap().x};
-      let ch = CH{i:index,x:cx,y:0,c:'\r',w:0};
+      let cy = {POS.lock().unwrap().y};
+      let ch = CH{x:cx,y:cy,c:'\r'};
       save(ch);
     },
     _ => {},
@@ -348,16 +344,12 @@ fn drawtext(w :HWND, f :HFONT, mut c :CH, p :WPARAM)
       {
         let string :String = c.c.to_string();
         let ch = to_wstring(&string);
-        let mut char_w : INT = 0;
-        let ch_height = {*CHY.lock().unwrap()};
-        c.i = {*CHX.lock().unwrap()};
+        let ch_w = {*CHX.lock().unwrap()};
+        let ch_h = {*CHY.lock().unwrap()};
         c.x = {POS.lock().unwrap().x};
         c.y = {POS.lock().unwrap().y};
-        gdi::GetCharWidth32W(dc, 0 as UINT, 0 as UINT, &mut char_w); 
-        c.w = char_w;
-        gdi::TextOutW(dc, c.x, c.y * ch_height, ch.as_ptr(), 1);
-        POS.lock().unwrap().x += char_w;
-        *CHX.lock().unwrap() += 1;
+        gdi::TextOutW(dc, c.x * ch_w, c.y * ch_h, ch.as_ptr(), 1);
+        POS.lock().unwrap().x += 1;
       },
       _ => {},
     }
@@ -384,7 +376,7 @@ fn key_down(w :HWND)
 
 fn key_left(w :HWND)
 {
-  let x = {*CHX.lock().unwrap()};
+  let x = {POS.lock().unwrap().x};
   if x == 0 {return;}
   let mut index = getindex();
   let end = {*END.lock().unwrap()};
@@ -399,7 +391,7 @@ fn key_left(w :HWND)
   }
   else
   {
-    *CHX.lock().unwrap() -= 1;
+    POS.lock().unwrap().x -= 1;
     index = getindex();
     unsafe{user::HideCaret(w)};
     POS.lock().unwrap().x = getx(index);
@@ -414,7 +406,7 @@ fn key_right(w :HWND)
   if (index+1) == getlength()
   {
     unsafe{user::HideCaret(w)};
-    POS.lock().unwrap().x = getx(index) + getw(index);
+    POS.lock().unwrap().x = getx(index);
     showcaret(w);
     *END.lock().unwrap() = 1;
     return;
@@ -428,7 +420,7 @@ fn key_right(w :HWND)
     return;
   }
 
-  *CHX.lock().unwrap() += 1;
+  POS.lock().unwrap().x += 1;
   index = getindex();
   unsafe{user::HideCaret(w)};
   POS.lock().unwrap().x = getx(index);
@@ -439,10 +431,11 @@ fn showcaret(w :HWND)
 {
   let x = {POS.lock().unwrap().x};
   let y = {POS.lock().unwrap().y};
-  let h = {*CHY.lock().unwrap()};
+  let ch_w = {*CHX.lock().unwrap()};
+  let ch_h = {*CHY.lock().unwrap()};
   unsafe
   {
-    user::SetCaretPos(x, y*h);
+    user::SetCaretPos(x*ch_w, y*ch_h);
     user::ShowCaret(w);
   }
 }
@@ -514,7 +507,6 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
     {
       line(w,1);
       unsafe{user::HideCaret(w)};
-      *CHX.lock().unwrap() = 0;
       POS.lock().unwrap().x = 0;
       POS.lock().unwrap().y += 1;
       showcaret(w);
@@ -529,8 +521,8 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
     unsafe
     {
       user::HideCaret(w);
-      let d = std::char::from_u32_unchecked(p as u32);
-      let ch = CH{i:0, x:0,y:0,c:d,w:0};
+      let c = std::char::from_u32_unchecked(p as u32);
+      let ch = CH{x:0,y:0,c:c};
       drawtext(w, f, ch, 0);  
       showcaret(w);
     },
@@ -680,8 +672,14 @@ fn main()
 
     shell::DragAcceptFiles(hwnd, 1);
 
-    // *CHX.lock().unwrap() = tm.tmAveCharWidth;
+    let mut char_w : INT = 0;
+    let dc = user::GetDC(hwnd) as HDC;
+    gdi::SelectObject(dc, font as HGDIOBJ );
+    gdi::GetCharWidth32W(dc, 0 as UINT, 0 as UINT, &mut char_w); 
+    *CHX.lock().unwrap() = char_w;
     *CHY.lock().unwrap() = tm.tmHeight;
+    println!("ch_w:{0}, ch_h:{1}", char_w, tm.tmHeight);
+
 
     // background
     let brush = gdi::CreateSolidBrush(gdi::RGB(R_B,G_B,B_B)) as isize;
