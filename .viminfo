@@ -1,0 +1,70 @@
+# 이 viminfo 파일은 빔이 만든 것입니다 Vim 8.0.
+# 조심만 한다면 고칠 수도 있습니다!
+
+# Viminfo version
+|1,4
+
+# 이 파일이 저장되었을 때의 'encoding'의 값
+*encoding=utf-8
+
+
+# hlsearch on (H) or off (h):
+~h
+# Last Search Pattern:
+~MSle0~/HOME
+
+# 명령 행 히스토리 (새것부터 오래된 것 순):
+:wq
+|2,0,1526521960,,"wq"
+
+# 찾을 문자열 히스토리 (새것부터 오래된 것 순):
+?/HOME
+|2,1,1526521938,47,"HOME"
+?/HOOME
+|2,1,1526521935,47,"HOOME"
+
+# 표현 히스토리 (새것부터 오래된 것 순):
+
+# 입력 행 히스토리 (새것부터 오래된 것 순):
+
+# 디버그 행 히스토리 (새것부터 오래된 것 순):
+
+# 레지스터:
+""1	LINE	0
+	export HOME=/work/read
+|3,1,1,1,1,0,1526521920,"export HOME=/work/read"
+
+# 파일 마크:
+'0  194  12  /home/PC/.bashrc
+|4,48,194,12,1526521960,"/home/PC/.bashrc"
+'1  37  0  /home/PC/.bash_profile
+|4,49,37,0,1526521922,"/home/PC/.bash_profile"
+
+# 점프목록 (새것이 먼저):
+-'  194  12  /home/PC/.bashrc
+|4,39,194,12,1526521960,"/home/PC/.bashrc"
+-'  1  0  /home/PC/.bashrc
+|4,39,1,0,1526521938,"/home/PC/.bashrc"
+-'  37  0  /home/PC/.bash_profile
+|4,39,37,0,1526521922,"/home/PC/.bash_profile"
+-'  37  0  /home/PC/.bash_profile
+|4,39,37,0,1526521922,"/home/PC/.bash_profile"
+-'  1  0  /home/PC/.bash_profile
+|4,39,1,0,1526521919,"/home/PC/.bash_profile"
+-'  1  0  /home/PC/.bash_profile
+|4,39,1,0,1526521919,"/home/PC/.bash_profile"
+
+# 파일내의 마크 히스토리 (새것부터 오래된 순):
+
+> /home/PC/.bashrc
+	*	1526521958	0
+	"	194	12
+	^	194	13
+	.	194	12
+	+	194	12
+
+> /home/PC/.bash_profile
+	*	1526521920	0
+	"	37	0
+	.	38	0
+	+	38	0

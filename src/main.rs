@@ -33,6 +33,7 @@ extern crate lazy_static;
 const SX: i32 = 200; const SY: i32 = 200; const W:  i32 = 800; const H:  i32 = 600;
 const R_A: u8 = 250; const G_A: u8 = 250; const B_A: u8 = 250;
 const R_B: u8 = 0;   const G_B: u8 = 0;   const B_B: u8 = 0;
+const R:   u8 = 0;   const L:   u8 = 1; 
 
 extern crate winapi; 
 
@@ -126,10 +127,13 @@ fn fileio(w :HWND, f :HFONT, path :String, mode :u8)
               { 
                 let mut ch = CH{x:0,y:0,c:c};
                 drawtext(w, f, ch, 0); 
+                POS.lock().unwrap().x += 1;
               },
             }
           }
-          showcaret(w);
+          let x = {POS.lock().unwrap().x} as usize;
+          let y = {POS.lock().unwrap().y} as usize;
+          showcaret(w, x, y);
           *END.lock().unwrap() = 1;
         },
         // write
@@ -207,77 +211,23 @@ fn getc(i :usize) -> char
   c 
 }
 
-fn getindex() -> usize
+fn getindex(x :usize, y :usize) -> Option<usize>
 {
-  let mut x = {POS.lock().unwrap().x} as usize;
-  let y = {POS.lock().unwrap().y} as usize;
+  // let end = {*END.lock().unwrap()};
 
-  match y
-  {
-    0 =>
-    {
-      if x !=0 {x -= 1};
-    },
-    _ =>
-    {
-      let mut real_pos = 0;
-      let vec = {TEXT.lock().unwrap()};
-      let mut iter = vec.iter().enumerate()
-        .filter_map(|e| if (*e.1).c == '\r' {Some(e.0)} else {None});
-      for i in 0..y
-      {
-        let index = iter.next(); 
-        if (None != index) && (i == (y-1))
-        {
-          real_pos = index.unwrap();
-        }
-      }
-      x += real_pos;
-    },
-  }
-  x
+
+  let vec = {TEXT.lock().unwrap()};
+  let index = vec.iter()
+    .position
+    (
+      |ref e| 
+      ( (e.x as usize == x) && (e.y as usize == y) ) 
+    );
+  index 
 }
 
 fn backspace() -> Result<usize,usize>
 {
-  if getlength() == 0
-  {
-    println!("len:{0}", getlength());
-    return Err(0);
-  }
-
-  let mut x = {POS.lock().unwrap().x} as usize;
-  let y = {POS.lock().unwrap().y};
-
-  if x == 0
-  {
-    *DEX.lock().unwrap() += 1;
-    let count_0 = {*DEX.lock().unwrap()};
-    match count_0
-    {
-      2 =>
-      {
-        x = getindex() - 1;
-        POS.lock().unwrap().x = getx(x);
-        POS.lock().unwrap().y -= 1;
-        *DEX.lock().unwrap() = 0;
-      },
-      _ => 
-      {
-        x = getindex();
-        println!("[x == 0 0] x: {0}, y: {1}, len:{2}", x, y, getlength());
-      },
-    }
-  }
-  else
-  {
-    x = getindex();
-    println!("[x != 0] x: {0}, y: {1}, len:{2}", x, y, getlength());
-    POS.lock().unwrap().x -= 1;
-  }
-
-  println!("x: {0}, y: {1}, len:{2}", x, y, getlength());
-
   // Ok(x)
   Err(0)
 }
@@ -299,30 +249,14 @@ fn line(w :HWND, mode :u8)
     // delete
     0 =>
     {
-      let x = backspace();
-      match x
-      {
-        Ok(x) =>
-        {
-          let rect = getrect(x);
-          unsafe
-          {
-            user::HideCaret(w);
-            user::InvalidateRect(w, &rect, 1);
-          }
-          showcaret(w);
-          remove(x);
-        },
-        _ => {},
-      }
       // for val in vec.iter() {print!("[{0}]", val.c as u8);} println!{""};
     },
     // enter
     1 =>
     {
-      let cx = {POS.lock().unwrap().x};
-      let cy = {POS.lock().unwrap().y};
-      let ch = CH{x:cx,y:cy,c:'\r'};
+      let x = {POS.lock().unwrap().x};
+      let y = {POS.lock().unwrap().y};
+      let ch = CH{x:x,y:y,c:'\r'};
       save(ch);
     },
     _ => {},
@@ -349,7 +283,6 @@ fn drawtext(w :HWND, f :HFONT, mut c :CH, p :WPARAM)
         c.x = {POS.lock().unwrap().x};
         c.y = {POS.lock().unwrap().y};
         gdi::TextOutW(dc, c.x * ch_w, c.y * ch_h, ch.as_ptr(), 1);
-        POS.lock().unwrap().x += 1;
       },
       _ => {},
     }
@@ -362,81 +295,108 @@ fn key_up(w :HWND)
 {
   let y = {POS.lock().unwrap().y};
   if y == 0 {return;}
+  // *END.lock().unwrap() = 0;
   unsafe{user::HideCaret(w)};
   POS.lock().unwrap().y -= 1;
-  showcaret(w);
+  let x = {POS.lock().unwrap().x} as usize;
+  let y = {POS.lock().unwrap().y} as usize;
+  showcaret(w, x, y);
 }
 
 fn key_down(w :HWND)
 {
   unsafe{user::HideCaret(w)};
   POS.lock().unwrap().y += 1;
-  showcaret(w);
+  let x = {POS.lock().unwrap().x} as usize;
+  let y = {POS.lock().unwrap().y} as usize;
+  showcaret(w, x, y);
 }
 
 fn key_left(w :HWND)
 {
-  let x = {POS.lock().unwrap().x};
-  if x == 0 {return;}
-  let mut index = getindex();
-  let end = {*END.lock().unwrap()};
-
-  if end == 1
+  let x = {POS.lock().unwrap().x} as usize;
+  let y = {POS.lock().unwrap().y} as usize;
+  let index = getindex(x,y);
+  match index
   {
-    index = getindex();
-    unsafe{user::HideCaret(w)};
-    POS.lock().unwrap().x = getx(index);
-    showcaret(w);
-    *END.lock().unwrap() = 0;
+    None => {},
+    _ =>
+    {
+      unsafe{user::HideCaret(w)};
+      POS.lock().unwrap().x = getx(index.unwrap()-1);
+      let x1 = {POS.lock().unwrap().x} as usize;
+      let y1 = {POS.lock().unwrap().y} as usize;
+      showcaret(w, x1, y1);
+    },
   }
-  else
-  {
-    POS.lock().unwrap().x -= 1;
-    index = getindex();
-    unsafe{user::HideCaret(w)};
-    POS.lock().unwrap().x = getx(index);
-    showcaret(w);
-  }
-
 }
 
 fn key_right(w :HWND)
 {
-  let mut index = getindex();
-  if (index+1) == getlength()
+  let x = {POS.lock().unwrap().x} as usize;
+  let y = {POS.lock().unwrap().y} as usize;
+  let index = getindex(x,y);
+  match index
   {
-    unsafe{user::HideCaret(w)};
-    POS.lock().unwrap().x = getx(index);
-    showcaret(w);
-    *END.lock().unwrap() = 1;
-    return;
+    None => {},
+    _ =>
+    {
+      unsafe{user::HideCaret(w)};
+      POS.lock().unwrap().x = getx(index.unwrap());
+      let x1 = {POS.lock().unwrap().x} as usize;
+      let y1 = {POS.lock().unwrap().y} as usize;
+      showcaret(w, x1, y1);
+    },
   }
-
-  if getc(index) == '\r'
-  {
-    unsafe{user::HideCaret(w)};
-    POS.lock().unwrap().x = getx(index);
-    showcaret(w);
-    return;
-  }
-
-  POS.lock().unwrap().x += 1;
-  index = getindex();
-  unsafe{user::HideCaret(w)};
-  POS.lock().unwrap().x = getx(index);
-  showcaret(w);
 }
 
-fn showcaret(w :HWND)
+fn showcaret(w :HWND, x :usize, y :usize)
 {
-  let x = {POS.lock().unwrap().x};
-  let y = {POS.lock().unwrap().y};
-  let ch_w = {*CHX.lock().unwrap()};
-  let ch_h = {*CHY.lock().unwrap()};
-  unsafe
+  let option = getindex(x,y);
+  match option
   {
-    user::SetCaretPos(x*ch_w, y*ch_h);
-    user::ShowCaret(w);
+    None => 
+    {
+      let i = getlength() + 1;
+      match i
+      {
+        1 => 
+        {
+          unsafe
+          {
+            user::SetCaretPos(0,0);
+            user::ShowCaret(w);
+          }
+        },
+        _ =>
+        {
+          let x = {POS.lock().unwrap().x};
+          let y = {POS.lock().unwrap().y};
+          let ch_w = {*CHX.lock().unwrap()};
+          let ch_h = {*CHY.lock().unwrap()};
+          unsafe
+          {
+            user::SetCaretPos(x*ch_w, y*ch_h);
+            user::ShowCaret(w);
+          }
+        },
+      }
+    },
+    _ =>
+    {
+      let index = option.unwrap();
+      let x     = getx(index);
+      let y     = gety(index);
+      let c     = getc(index);
+      let ch_w  = {*CHX.lock().unwrap()};
+      let ch_h  = {*CHY.lock().unwrap()};
+      unsafe
+      {
+        if c == '\r' {user::SetCaretPos(x*ch_w, y*ch_h);}
+        else {user::SetCaretPos(x*ch_w+ch_w, y*ch_h);}
+        user::ShowCaret(w);
+      }
+    },
   }
 }
 
@@ -509,7 +469,9 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
       unsafe{user::HideCaret(w)};
       POS.lock().unwrap().x = 0;
       POS.lock().unwrap().y += 1;
-      showcaret(w);
+      let x = {POS.lock().unwrap().x} as usize;
+      let y = {POS.lock().unwrap().y} as usize;
+      showcaret(w, x, y);
     },
     // esc
     0x1B => 
@@ -524,7 +486,10 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
       let c = std::char::from_u32_unchecked(p as u32);
       let ch = CH{x:0,y:0,c:c};
       drawtext(w, f, ch, 0);  
-      showcaret(w);
+      let x = {POS.lock().unwrap().x} as usize;
+      let y = {POS.lock().unwrap().y} as usize;
+      showcaret(w, x, y);
+      POS.lock().unwrap().x += 1;
     },
   }
 }
@@ -668,7 +633,7 @@ fn main()
     user::ReleaseDC(hwnd, dc);
 
     user::CreateCaret(hwnd, 0 as HBITMAP, 1, tm.tmHeight);
-    showcaret(hwnd);
+    showcaret(hwnd, 0, 0);
 
     shell::DragAcceptFiles(hwnd, 1);
 
@@ -678,8 +643,6 @@ fn main()
     gdi::GetCharWidth32W(dc, 0 as UINT, 0 as UINT, &mut char_w); 
     *CHX.lock().unwrap() = char_w;
     *CHY.lock().unwrap() = tm.tmHeight;
-    println!("ch_w:{0}, ch_h:{1}", char_w, tm.tmHeight);
-
 
     // background
     let brush = gdi::CreateSolidBrush(gdi::RGB(R_B,G_B,B_B)) as isize;
