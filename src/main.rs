@@ -115,9 +115,9 @@ fn fileio(w :HWND, f :HFONT, path :String, mode :u8)
             {
               '\r' =>
               {
-                let cx = {POS.lock().unwrap().x};
-                let cy = {POS.lock().unwrap().y};
-                let ch = CH{x:cx, y:cy,c:c};
+                let x = {POS.lock().unwrap().x};
+                let y = {POS.lock().unwrap().y};
+                let ch = CH{x:x, y:y,c:c};
                 save(ch);
                 POS.lock().unwrap().x = 0;
                 POS.lock().unwrap().y += 1;
@@ -193,15 +193,15 @@ fn getlength() -> usize
 fn getx(i :usize) -> LONG 
 {
   let vec = {TEXT.lock().unwrap()};
-  let index = vec[i].x;
-  index
+  let x = vec[i].x;
+  x
 }
 
 fn gety(i :usize) -> LONG 
 {
   let vec = {TEXT.lock().unwrap()};
-  let index = vec[i].y;
-  index
+  let y = vec[i].y;
+  y 
 }
 
 fn getc(i :usize) -> char 
@@ -213,9 +213,6 @@ fn getc(i :usize) -> char
 
 fn getindex(x :usize, y :usize) -> Option<usize>
 {
-  // let end = {*END.lock().unwrap()};
-
-
   let vec = {TEXT.lock().unwrap()};
   let index = vec.iter()
     .position
@@ -295,7 +292,6 @@ fn key_up(w :HWND)
 {
   let y = {POS.lock().unwrap().y};
   if y == 0 {return;}
-  // *END.lock().unwrap() = 0;
   unsafe{user::HideCaret(w)};
   POS.lock().unwrap().y -= 1;
   let x = {POS.lock().unwrap().x} as usize;
@@ -314,27 +310,13 @@ fn key_down(w :HWND)
 
 fn key_left(w :HWND)
 {
-  let x = {POS.lock().unwrap().x} as usize;
+  let mut x = {POS.lock().unwrap().x} as usize;
   let y = {POS.lock().unwrap().y} as usize;
-  let index = getindex(x,y);
-  match index
-  {
-    None => {},
-    _ =>
-    {
-      unsafe{user::HideCaret(w)};
-      POS.lock().unwrap().x = getx(index.unwrap()-1);
-      let x1 = {POS.lock().unwrap().x} as usize;
-      let y1 = {POS.lock().unwrap().y} as usize;
-      showcaret(w, x1, y1);
-    },
-  }
-}
+  if x == 0 {return;}
 
-fn key_right(w :HWND)
-{
-  let x = {POS.lock().unwrap().x} as usize;
-  let y = {POS.lock().unwrap().y} as usize;
+  *END.lock().unwrap() = 0;
+  POS.lock().unwrap().x -= 1;
+  x = {POS.lock().unwrap().x} as usize;
   let index = getindex(x,y);
   match index
   {
@@ -343,9 +325,44 @@ fn key_right(w :HWND)
     {
       unsafe{user::HideCaret(w)};
       POS.lock().unwrap().x = getx(index.unwrap());
-      let x1 = {POS.lock().unwrap().x} as usize;
-      let y1 = {POS.lock().unwrap().y} as usize;
-      showcaret(w, x1, y1);
+      x = {POS.lock().unwrap().x} as usize;
+      showcaret(w, x, y);
+    },
+  }
+}
+
+fn key_right(w :HWND)
+{
+  let mut x = {POS.lock().unwrap().x} as usize;
+  let y = {POS.lock().unwrap().y} as usize;
+  let end = {*END.lock().unwrap()};
+
+  let index = getindex(x,y);
+  let length = getlength();
+  match index
+  {
+    None => {},
+    _ =>
+    {
+      if '\r' == getc(index.unwrap()) {return;}
+
+      if (length - 1) == index.unwrap()
+      {
+        if end != 1
+        {
+          *END.lock().unwrap() = 1;
+          unsafe{user::HideCaret(w)};
+          POS.lock().unwrap().x = getx(index.unwrap()) + 1;
+          x = {POS.lock().unwrap().x} as usize;
+          showcaret(w, x, y);
+        }
+        return;
+      }
+
+      unsafe{user::HideCaret(w)};
+      POS.lock().unwrap().x = getx(index.unwrap()+1);
+      x = {POS.lock().unwrap().x} as usize;
+      showcaret(w, x, y);
     },
   }
 }
@@ -392,8 +409,7 @@ fn showcaret(w :HWND, x :usize, y :usize)
       let ch_h  = {*CHY.lock().unwrap()};
       unsafe
       {
-        if c == '\r' {user::SetCaretPos(x*ch_w, y*ch_h);}
-        else {user::SetCaretPos(x*ch_w+ch_w, y*ch_h);}
+        user::SetCaretPos(x*ch_w, y*ch_h);
         user::ShowCaret(w);
       }
     },
@@ -500,7 +516,8 @@ pub unsafe extern "system" fn window_proc(w :HWND,
   if msg == user::WM_CREATE
   {
     let param = &*(l as LPCREATESTRUCTW);
-    user::SetWindowLongPtrW(w, user::GWLP_USERDATA,  param.lpCreateParams as isize);
+    // user::SetWindowLongPtrW(w, user::GWLP_USERDATA,  param.lpCreateParams as isize); // 64bit
+    user::SetWindowLongPtrW(w, user::GWLP_USERDATA,  param.lpCreateParams as i32);      // 32bit
   }
 
   match msg 
@@ -583,9 +600,7 @@ fn main()
     let hwnd = user::CreateWindowExW(0, class_name.as_ptr(), 
       to_wstring("read v0.1").as_ptr(),
       WS_OVERLAPPEDWINDOW | WS_VISIBLE, 0, 0, W, H, 0 as HWND, 0 as HMENU, 0 as HINSTANCE, font as LPVOID);
-    // WS_OVERLAPPEDWINDOW | WS_VISIBLE, 0, 0, W, H, 0 as HWND, 0 as HMENU, 0 as HINSTANCE, ptr::null_mut());
   
-    // user::InvalidateRect(hwnd, ptr::null(), 1);
     user::ShowWindow(hwnd, user::SW_SHOW);
       
     let mut msg = user::MSG 
@@ -605,6 +620,7 @@ fn main()
     }
 
     let dc = user::GetDC(hwnd) as HDC;
+    let mut char_w : INT = 0;
     let mut tm = gdi::TEXTMETRICW
     {
       tmHeight: 0,
@@ -629,23 +645,21 @@ fn main()
       tmCharSet: 0,
     };
     gdi::SelectObject(dc, font as HGDIOBJ );
+    gdi::GetCharWidth32W(dc, 0 as UINT, 0 as UINT, &mut char_w); 
     gdi::GetTextMetricsW(dc, &mut tm);
     user::ReleaseDC(hwnd, dc);
+
+    *CHX.lock().unwrap() = char_w;
+    *CHY.lock().unwrap() = tm.tmHeight;
 
     user::CreateCaret(hwnd, 0 as HBITMAP, 1, tm.tmHeight);
     showcaret(hwnd, 0, 0);
 
     shell::DragAcceptFiles(hwnd, 1);
 
-    let mut char_w : INT = 0;
-    let dc = user::GetDC(hwnd) as HDC;
-    gdi::SelectObject(dc, font as HGDIOBJ );
-    gdi::GetCharWidth32W(dc, 0 as UINT, 0 as UINT, &mut char_w); 
-    *CHX.lock().unwrap() = char_w;
-    *CHY.lock().unwrap() = tm.tmHeight;
-
     // background
-    let brush = gdi::CreateSolidBrush(gdi::RGB(R_B,G_B,B_B)) as isize;
+    // let brush = gdi::CreateSolidBrush(gdi::RGB(R_B,G_B,B_B)) as isize; // 64bit
+    let brush = gdi::CreateSolidBrush(gdi::RGB(R_B,G_B,B_B)) as i32;      // 32bit
     user::SetClassLongPtrW(hwnd, user::GCLP_HBRBACKGROUND, brush);
     user::MoveWindow(hwnd, SX, SY, W, H, 1);
 
