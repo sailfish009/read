@@ -335,17 +335,15 @@ fn key_right(w :HWND)
 {
   let mut x = {POS.lock().unwrap().x} as usize;
   let y = {POS.lock().unwrap().y} as usize;
-  let end = {*END.lock().unwrap()};
-
   let index = getindex(x,y);
-  let length = getlength();
   match index
   {
     None => {},
     _ =>
     {
       if '\r' == getc(index.unwrap()) {return;}
-
+      let length = getlength();
+      let end = {*END.lock().unwrap()};
       if (length - 1) == index.unwrap()
       {
         if end != 1
@@ -426,8 +424,8 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
       // ctrl + o 
       0x0F => 
       {
-        let path = String::from("./sample.txt");
-        fileio(w, f, path, 0); 
+        // let path = String::from("./sample.txt");
+        // fileio(w, f, path, 0); 
         println!("file open");
       },
       0x13 => println!("0x13"),
@@ -502,10 +500,10 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
       let c = std::char::from_u32_unchecked(p as u32);
       let ch = CH{x:0,y:0,c:c};
       drawtext(w, f, ch, 0);  
+      POS.lock().unwrap().x += 1;
       let x = {POS.lock().unwrap().x} as usize;
       let y = {POS.lock().unwrap().y} as usize;
       showcaret(w, x, y);
-      POS.lock().unwrap().x += 1;
     },
   }
 }
