@@ -100,7 +100,7 @@ fn fileio(w :HWND, f :HFONT, path :String, mode :u8)
         // read 
         0 =>
         {
-          unsafe{user::HideCaret(w);}
+          hidecaret(w);
           clear();
           clearscreen(w);
           *POS.lock().unwrap() = POINT{x:0, y:0};
@@ -126,7 +126,7 @@ fn fileio(w :HWND, f :HFONT, path :String, mode :u8)
               { 
                 let x = {POS.lock().unwrap().x};
                 let y = {POS.lock().unwrap().y};
-                let mut ch = CH{x:x,y:y,c:c};
+                let ch = CH{x:x,y:y,c:c};
                 drawtext(w, f, ch, 0); 
                 POS.lock().unwrap().x += 1;
               },
@@ -255,7 +255,13 @@ fn getrect(i :usize) -> RECT
   let vec = {TEXT.lock().unwrap()};
   let ch_w = {*CHX.lock().unwrap()};
   let ch_h = {*CHY.lock().unwrap()};
-  let rect = RECT{left:vec[i].x*ch_w, top:(vec[i].y*ch_h),right:(vec[i].x*ch_w+ch_w),bottom:(vec[i].y*ch_h+ch_h)};
+  let rect = RECT
+  {
+    left:vec[i].x*ch_w, 
+    top:(vec[i].y*ch_h),
+    right:(vec[i].x*ch_w+ch_w),
+    bottom:(vec[i].y*ch_h+ch_h)
+  };
   rect
 }
 
@@ -280,7 +286,7 @@ fn line(w :HWND, mode :u8)
   }
 }
 
-fn drawtext(w :HWND, f :HFONT, mut c :CH, p :WPARAM)
+fn drawtext(w :HWND, f :HFONT, c :CH, p :WPARAM)
 {
   unsafe
   {
@@ -297,10 +303,7 @@ fn drawtext(w :HWND, f :HFONT, mut c :CH, p :WPARAM)
 
     match p 
     {
-      0 =>
-      {
-        save(c);
-      },
+      0 => {save(c);},
       _ => {},
     }
     user::ReleaseDC(w, dc);
@@ -311,7 +314,7 @@ fn key_up(w :HWND)
 {
   let y = {POS.lock().unwrap().y};
   if y == 0 {return;}
-  unsafe{user::HideCaret(w)};
+  hidecaret(w);
   POS.lock().unwrap().y -= 1;
   let x = {POS.lock().unwrap().x} as usize;
   let y = {POS.lock().unwrap().y} as usize;
@@ -320,7 +323,7 @@ fn key_up(w :HWND)
 
 fn key_down(w :HWND)
 {
-  unsafe{user::HideCaret(w)};
+  hidecaret(w);
   POS.lock().unwrap().y += 1;
   let x = {POS.lock().unwrap().x} as usize;
   let y = {POS.lock().unwrap().y} as usize;
@@ -342,9 +345,9 @@ fn key_left(w :HWND)
     None => {},
     _ =>
     {
-      unsafe{user::HideCaret(w)};
-      POS.lock().unwrap().x = getx(index.unwrap());
-      x = {POS.lock().unwrap().x} as usize;
+      hidecaret(w);
+      x = getx(index.unwrap()) as usize;
+      POS.lock().unwrap().x = x as i32;
       showcaret(w, x, y);
     },
   }
@@ -368,7 +371,7 @@ fn key_right(w :HWND)
         if end != 1
         {
           *END.lock().unwrap() = 1;
-          unsafe{user::HideCaret(w)};
+          hidecaret(w);
           POS.lock().unwrap().x = getx(index.unwrap()) + 1;
           x = {POS.lock().unwrap().x} as usize;
           showcaret(w, x, y);
@@ -376,9 +379,9 @@ fn key_right(w :HWND)
         return;
       }
 
-      unsafe{user::HideCaret(w)};
-      POS.lock().unwrap().x = getx(index.unwrap()+1);
-      x = {POS.lock().unwrap().x} as usize;
+      hidecaret(w);
+      x = getx(index.unwrap()+1) as usize;
+      POS.lock().unwrap().x = x as i32;
       showcaret(w, x, y);
     },
   }
@@ -433,11 +436,15 @@ fn showcaret(w :HWND, x :usize, y :usize)
   }
 }
 
+fn hidecaret(w :HWND)
+{
+  unsafe{user::HideCaret(w);}
+}
+
 fn edit(w :HWND, p :WPARAM, f :HFONT)
 {
   if unsafe{user::GetAsyncKeyState(user::VK_CONTROL)} as u16 & 0x8000 != 0
   {
-    // unsafe{user::HideCaret(w)};
     println!("p: 0x{0:2x}", p as u8);
     match p 
     {
@@ -452,7 +459,7 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
         for val in vec.iter() {print!("[{0}]", val.c as u8);} println!{""};
       },
       // ctrl + x 
-      0x0F => 
+      0x18 => 
       {
       },
       0x13 => println!("0x13"),
@@ -465,19 +472,19 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
   }
 
   let mode = {*MODE.lock().unwrap()};
-
   match mode
   {
     // save mode
     0 =>
     unsafe
     {
-      user::HideCaret(w);
+      hidecaret(w);
       match p
       {
         // 0: move key to x 0
         0x30 => 
         {
+          *END.lock().unwrap() = 0;
           let y = {POS.lock().unwrap().y};
           let ch_h = {*CHY.lock().unwrap()};
           user::SetCaretPos(0, y*ch_h);
@@ -508,6 +515,13 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
                   user::SetCaretPos(x*ch_w, y*ch_h);
                   POS.lock().unwrap().x = x;
                   break;
+                }
+                else if i == (length-1)
+                {
+                  *END.lock().unwrap() = 1;
+                  let x = getx(i)+1;
+                  user::SetCaretPos(x*ch_w, y*ch_h);
+                  POS.lock().unwrap().x = x;
                 }
               }
             },
@@ -550,7 +564,7 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
     0x0D => 
     {
       line(w,1);
-      unsafe{user::HideCaret(w)};
+      hidecaret(w);
       POS.lock().unwrap().x = 0;
       POS.lock().unwrap().y += 1;
       let x = {POS.lock().unwrap().x} as usize;
@@ -573,7 +587,7 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
       {
         None => 
         {
-          user::HideCaret(w);
+          hidecaret(w);
           let c = std::char::from_u32_unchecked(p as u32);
           let ch = CH{x:x as i32,y:y as i32,c:c};
           drawtext(w, f, ch, 0);  
@@ -588,16 +602,15 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
           let length = getlength();
           if index < length
           {
-            let mut line_end  = length;
-            unsafe{user::HideCaret(w);}
+            let mut line_end  = length+1;
+            hidecaret(w);
             for i in index..length
             {
               let c = getc(i);
               if '\r' == c 
               {
-                let x = getx(i)+1;
-                setx(i, x);
                 line_end = i+1;
+                setx(i, getx(i)+1);
                 break;
               }
               else
