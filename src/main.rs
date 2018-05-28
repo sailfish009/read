@@ -61,14 +61,13 @@ struct CH {x :LONG,  y :LONG, c :char}
 
 lazy_static!
 {
-  // MODE:  0: edit,  1: save 
-  static ref MODE: Mutex<u8> = Mutex::new(1);
+  // MODE:  0: save  1(i),2(a): edit  
+  static ref MODE: Mutex<u8> = Mutex::new(0);
   static ref TEXT: Mutex<Vec<CH>> = Mutex::new(Vec::new());
   static ref POS: Mutex<POINT> = Mutex::new(POINT{x:0, y:0});
   static ref CHX: Mutex<LONG> = Mutex::new(0);
   static ref CHY: Mutex<LONG> = Mutex::new(0);
   static ref END: Mutex<u8> = Mutex::new(0);
-  static ref DEX: Mutex<u8> = Mutex::new(0);
 }
 
 // fn to_wchar(str : &str) -> *const u16 
@@ -125,7 +124,9 @@ fn fileio(w :HWND, f :HFONT, path :String, mode :u8)
               '\n' =>{},
               _ => 
               { 
-                let mut ch = CH{x:0,y:0,c:c};
+                let x = {POS.lock().unwrap().x};
+                let y = {POS.lock().unwrap().y};
+                let mut ch = CH{x:x,y:y,c:c};
                 drawtext(w, f, ch, 0); 
                 POS.lock().unwrap().x += 1;
               },
@@ -165,6 +166,12 @@ fn clearscreen(w :HWND)
   }
 }
 
+fn clearch(w :HWND, i :usize)
+{
+  let rect = getrect(i);
+  unsafe {user::InvalidateRect(w, &rect, 0);}
+}
+
 fn clear()
 {
   let mut vec = {TEXT.lock().unwrap()};
@@ -175,6 +182,12 @@ fn remove(i :usize)
 {
   let mut vec = {TEXT.lock().unwrap()};
   vec.remove(i);
+}
+
+fn insert(i :usize, c :CH)
+{
+  let mut vec = {TEXT.lock().unwrap()};
+  vec.insert(i, c)
 }
 
 fn save(c :CH)
@@ -214,13 +227,20 @@ fn getc(i :usize) -> char
 fn getindex(x :usize, y :usize) -> Option<usize>
 {
   let vec = {TEXT.lock().unwrap()};
-  let index = vec.iter()
-    .position
-    (
-      |ref e| 
-      ( (e.x as usize == x) && (e.y as usize == y) ) 
-    );
+  let index = vec.iter().position(|ref e| ((e.x as usize == x) && (e.y as usize == y)));
   index 
+}
+
+fn setx(i :usize, x :LONG)
+{
+  let mut vec = {TEXT.lock().unwrap()};
+  vec[i].x = x;
+}
+
+fn sety(i :usize, y :LONG)
+{
+  let mut vec = {TEXT.lock().unwrap()};
+  vec[i].y = y;
 }
 
 fn backspace() -> Result<usize,usize>
@@ -235,7 +255,7 @@ fn getrect(i :usize) -> RECT
   let vec = {TEXT.lock().unwrap()};
   let ch_w = {*CHX.lock().unwrap()};
   let ch_h = {*CHY.lock().unwrap()};
-  let rect = RECT{left:vec[i].x, top:(vec[i].y*ch_h),right:(vec[i].x+ch_w),bottom:(vec[i].y*ch_h+ch_h)};
+  let rect = RECT{left:vec[i].x*ch_w, top:(vec[i].y*ch_h),right:(vec[i].x*ch_w+ch_w),bottom:(vec[i].y*ch_h+ch_h)};
   rect
 }
 
@@ -269,23 +289,22 @@ fn drawtext(w :HWND, f :HFONT, mut c :CH, p :WPARAM)
     gdi::SetTextColor(dc, gdi::RGB(R_A,G_A,B_A));
     gdi::SetBkColor(dc, gdi::RGB(R_B,G_B,B_B));
 
+    let string :String = c.c.to_string();
+    let ch = to_wstring(&string);
+    let ch_w = {*CHX.lock().unwrap()};
+    let ch_h = {*CHY.lock().unwrap()};
+    gdi::TextOutW(dc, c.x * ch_w, c.y * ch_h, ch.as_ptr(), 1);
+
     match p 
     {
       0 =>
       {
-        let string :String = c.c.to_string();
-        let ch = to_wstring(&string);
-        let ch_w = {*CHX.lock().unwrap()};
-        let ch_h = {*CHY.lock().unwrap()};
-        c.x = {POS.lock().unwrap().x};
-        c.y = {POS.lock().unwrap().y};
-        gdi::TextOutW(dc, c.x * ch_w, c.y * ch_h, ch.as_ptr(), 1);
+        save(c);
       },
       _ => {},
     }
     user::ReleaseDC(w, dc);
   }
-  save(c);
 }
 
 fn key_up(w :HWND)
@@ -418,7 +437,8 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
 {
   if unsafe{user::GetAsyncKeyState(user::VK_CONTROL)} as u16 & 0x8000 != 0
   {
-    unsafe{user::HideCaret(w)};
+    // unsafe{user::HideCaret(w)};
+    println!("p: 0x{0:2x}", p as u8);
     match p 
     {
       // ctrl + o 
@@ -426,7 +446,14 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
       {
         // let path = String::from("./sample.txt");
         // fileio(w, f, path, 0); 
-        println!("file open");
+        let length = getlength();
+        println!("debug, length: {0}", length);
+        let vec = {TEXT.lock().unwrap()};
+        for val in vec.iter() {print!("[{0}]", val.c as u8);} println!{""};
+      },
+      // ctrl + x 
+      0x0F => 
+      {
       },
       0x13 => println!("0x13"),
       0x02 => println!("0x02"),
@@ -442,17 +469,60 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
   match mode
   {
     // save mode
-    1 =>
+    0 =>
     unsafe
     {
       user::HideCaret(w);
       match p
       {
-        // key move
+        // 0: move key to x 0
+        0x30 => 
+        {
+          let y = {POS.lock().unwrap().y};
+          let ch_h = {*CHY.lock().unwrap()};
+          user::SetCaretPos(0, y*ch_h);
+          POS.lock().unwrap().x = 0;
+        },
+        // $: move key to x end
+        0x24 => 
+        {
+          let x = {POS.lock().unwrap().x} as usize;
+          let y = {POS.lock().unwrap().y} as usize;
+          let index = getindex(x,y);
+          match index
+          {
+            None => {},
+            _ =>
+            {
+              let index = index.unwrap();
+              let length = getlength();
+              let y = {POS.lock().unwrap().y};
+              let ch_w = {*CHX.lock().unwrap()} as i32;
+              let ch_h = {*CHY.lock().unwrap()};
+
+              for i in index..length
+              {
+                if getc(i) == '\r' 
+                {
+                  let x = getx(i);
+                  user::SetCaretPos(x*ch_w, y*ch_h);
+                  POS.lock().unwrap().x = x;
+                  break;
+                }
+              }
+            },
+          }
+
+        },
+        // a: change mode 
+        0x61 => 
+        {
+          *MODE.lock().unwrap() = 1;
+        },
         // i: change mode 
         0x69 => 
         {
-          *MODE.lock().unwrap() = 0;
+          *MODE.lock().unwrap() = 2;
         },
         // h, j, k, l
         0x68 => key_left(w), 0x6A => key_down(w), 0x6B => key_up(w), 0x6C => key_right(w),
@@ -490,20 +560,75 @@ fn edit(w :HWND, p :WPARAM, f :HFONT)
     // esc
     0x1B => 
     {
-      *MODE.lock().unwrap() = 1;
+      *MODE.lock().unwrap() = 0;
     },
     _ => 
     // edit
     unsafe
     {
-      user::HideCaret(w);
-      let c = std::char::from_u32_unchecked(p as u32);
-      let ch = CH{x:0,y:0,c:c};
-      drawtext(w, f, ch, 0);  
-      POS.lock().unwrap().x += 1;
       let x = {POS.lock().unwrap().x} as usize;
       let y = {POS.lock().unwrap().y} as usize;
-      showcaret(w, x, y);
+      let index = getindex(x,y);
+      match index
+      {
+        None => 
+        {
+          user::HideCaret(w);
+          let c = std::char::from_u32_unchecked(p as u32);
+          let ch = CH{x:x as i32,y:y as i32,c:c};
+          drawtext(w, f, ch, 0);  
+          POS.lock().unwrap().x += 1;
+          let x = {POS.lock().unwrap().x} as usize;
+          let y = {POS.lock().unwrap().y} as usize;
+          showcaret(w, x, y);
+        },
+        _ => 
+        {
+          let index = index.unwrap();
+          let length = getlength();
+          if index < length
+          {
+            let mut line_end  = length;
+            unsafe{user::HideCaret(w);}
+            for i in index..length
+            {
+              let c = getc(i);
+              if '\r' == c 
+              {
+                let x = getx(i)+1;
+                setx(i, x);
+                line_end = i+1;
+                break;
+              }
+              else
+              {
+                clearch(w, i);
+                setx(i, getx(i)+1);
+              }
+            }
+            let c = std::char::from_u32_unchecked(p as u32);
+            let ch = CH{x:x as i32,y:y as i32,c:c};
+            insert(index, ch);
+
+            for i in index..line_end
+            {
+              let c = getc(i);
+              let x = getx(i);
+              let y = gety(i);
+              let ch = CH{x:x as i32,y:y as i32,c:c};
+              drawtext(w, f, ch, 1);  
+            }
+            POS.lock().unwrap().x += 1;
+            let x = {POS.lock().unwrap().x} as usize;
+            let y = {POS.lock().unwrap().y} as usize;
+            showcaret(w, x, y);
+          }
+          else
+          {
+            println!("index >= length");
+          }
+        },
+      }
     },
   }
 }
@@ -544,7 +669,7 @@ pub unsafe extern "system" fn window_proc(w :HWND,
         let mut path = String::new();
         for val in v.iter() 
         {
-          let c : u8 = (*val & 0xFF) as u8;
+          let c = (*val & 0xFF) as u8;
           if c == 0 {break;} else { path.push(c as char);}
         } 
         // println!("file path : {:?}", path);
@@ -571,7 +696,7 @@ fn main()
   {
     let class_name = to_wstring("window");
     let font_name = to_wstring("Dejavu Sans Mono");
-    // let icon_name = to_wstring("./read.ico");
+    let icon_name = to_wstring("./read.ico");
 
     let font = gdi::CreateFontW(18, 0, 0, 0, 
       gdi::FW_LIGHT, 0, 0, 0, gdi::DEFAULT_CHARSET, gdi::OUT_DEFAULT_PRECIS, 
@@ -585,8 +710,9 @@ fn main()
       cbClsExtra: 0,
       cbWndExtra: 0,
       hInstance: 0 as HINSTANCE,
-      // hIcon: user::LoadIconW(0 as HINSTANCE, icon_name.as_ptr()),
-      hIcon: user::LoadIconW(0 as HINSTANCE, user::IDI_APPLICATION),
+      // hIcon: user::LoadIconW(0 as HINSTANCE, user::IDI_APPLICATION),
+      hIcon: user::LoadImageW(0 as HINSTANCE, icon_name.as_ptr(), user::IMAGE_ICON, 0, 0, 
+        user::LR_LOADFROMFILE | user::LR_DEFAULTSIZE | user::LR_SHARED) as HICON,
       hCursor: 0 as HICON, // user32::LoadCursorW(0 as HINSTANCE, user::IDI_APPLICATION),
       hbrBackground: 0 as HBRUSH,
       lpszMenuName: 0 as LPCWSTR,
